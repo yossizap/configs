@@ -21,6 +21,10 @@ Plugin 'majutsushi/tagbar'
 Plugin 'tpope/vim-speeddating'
 Plugin 'itchyny/calendar.vim'
 Plugin 'SyntaxRange'
+" :FZF [directory]
+Plugin 'junegunn/fzf'
+" In-file search plugin - :Ack [options] {pattern} [{directories}]
+Plugin 'mileszs/ack.vim'
 " Switch between highlighted objects with %
 Plugin 'andymass/vim-matchup'
 " ':Man <section> [page]'
@@ -290,6 +294,30 @@ let g:org_agenda_files = ['~/org/*.org']
 
 " Match-up settings
 " underline matching words, don't change the color of the match under the cursor
-hi MatchWord ctermfg=lightred guifg=lightred cterm=underline gui=underline
-hi MatchParenCur cterm=underline gui=underline
-hi MatchWordCur cterm=underline gui=underline
+hi MatchWord cterm=underline gui=underline
+
+" ack.vim settings
+" Use ag if available (silversearcher-ag)
+if executable('ag')
+  let g:ackprg = 'ag --vimgrep'
+endif
+
+" Don't jump to the first result automatically
+cnoreabbrev Ack Ack!
+nnoremap <Leader>a :Ack!<Space>
+
+" Customize fzf colors to match vim's color scheme
+let g:fzf_colors =
+\ { 'fg':      ['fg', 'Normal'],
+\ 'bg':      ['bg', 'Normal'],
+\ 'hl':      ['fg', 'Comment'],
+\ 'fg+':     ['fg', 'CursorLine', 'CursorColumn', 'Normal'],
+\ 'bg+':     ['bg', 'CursorLine', 'CursorColumn'],
+\ 'hl+':     ['fg', 'Statement'],
+\ 'info':    ['fg', 'PreProc'],
+\ 'border':  ['fg', 'Ignore'],
+\ 'prompt':  ['fg', 'Conditional'],
+\ 'pointer': ['fg', 'Exception'],
+\ 'marker':  ['fg', 'Keyword'],
+\ 'spinner': ['fg', 'Label'],
+\ 'header':  ['fg', 'Comment'] }
