@@ -1,5 +1,5 @@
 "------------------------------------------------------------
-" Plugins
+" Plugins - Run :PluginUpdate once in a while, :PluginInstall for new plugins
 filetype off
 set rtp+=~/.vim/bundle/Vundle.vim
 call vundle#begin()
@@ -21,6 +21,8 @@ Plugin 'majutsushi/tagbar'
 Plugin 'tpope/vim-speeddating'
 Plugin 'itchyny/calendar.vim'
 Plugin 'SyntaxRange'
+" Switch between highlighted objects with %
+Plugin 'andymass/vim-matchup'
 " ':Man <section> [page]'
 Plugin 'vim-utils/vim-man'
 call vundle#end()
@@ -41,7 +43,7 @@ filetype indent plugin on
 syntax on
 
 " When on a buffer becomes hidden when it is abandoned. Allows reusing the same
-" window and switching from an unsaed buffer without saving it first. Also allows
+" window and switching from an unused buffer without saving it first. Also allows
 " you to keep an undo history for multiple files when re-using the same window.
 set hidden
 
@@ -146,7 +148,8 @@ set autoindent
 set smartindent
 
 " Highlight matching bracket
-set showmatch
+"set showmatch
+"set matchtime=3
 
 " Maximum line length
 set textwidth=90
@@ -171,7 +174,7 @@ set cindent
 "      unclosed parentheses
 set cino=b1,c0,U1,ks
 
-" C - Automatically reindent once the user is done typing the line (on ';')
+" C - Automatically re-indent once the user is done typing the line (on ';')
 set cink+=*;
 
 " Disable text wrap
@@ -186,8 +189,14 @@ inoremap {;<CR> {<CR>};<ESC>O
 "------------------------------------------------------------
 " Directory browser settings
 
-" Case-insensitive file and directory lookup
+" zsh-like path auto-completion
+set wildmenu
+set wildmode=full
+
+" Case is ignored when completing file names and directories.
 set wildignorecase
+
+" Ignore temp/binary files
 set wildignore=*.a,*.o,*.pyc,*.pyo,*~
 
 "------------------------------------------------------------
@@ -213,10 +222,6 @@ set autowrite
 " Make a backup before overwriting a file.  Leave it around after the
 " file has been successfully written.
 set backup
-
-" zsh-like path autocompletion
-set wildmenu
-set wildmode=full
 
 "------------------------------------------------------------
 " Key mappings
@@ -245,12 +250,18 @@ nnoremap <silent> <M-k> :TmuxNavigateUp<cr>
 nnoremap <silent> <M-l> :TmuxNavigateRight<cr>
 nnoremap <silent> <M-\> :TmuxNavigatePrevious<cr>
 
-" Run script
+" Toggle spell check
+nnoremap <F8> :setlocal spell! spelllang=en_us<CR>
+
+" Escape by uncommon sequence
+inoremap jj <Esc>
+
+" TODO: Run scripts and makefiles
 
 "------------------------------------------------------------
 " Fold settings
 
-" Don't fold something smaller than func name+brackets
+" Don't fold something smaller than function name+brackets
 set foldminlines=3
 
 " Number of fold columns display on the left side of the screen
@@ -258,6 +269,9 @@ set foldcolumn=1
 
 " Folds are defined by syntax highlighting 
 set foldmethod=syntax
+
+" Ensure all folds are open up to a ridiculous nesting level
+set foldlevel=100
 
 "------------------------------------------------------------
 " Scripts
@@ -273,3 +287,9 @@ com! WP call WordProcessorMode()
 "------------------------------------------------------------
 " Plugin settings
 let g:org_agenda_files = ['~/org/*.org']
+
+" Match-up settings
+" underline matching words, don't change the color of the match under the cursor
+hi MatchWord ctermfg=lightred guifg=lightred cterm=underline gui=underline
+hi MatchParenCur cterm=underline gui=underline
+hi MatchWordCur cterm=underline gui=underline
