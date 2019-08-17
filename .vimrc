@@ -31,6 +31,8 @@ Plugin 'andymass/vim-matchup'
 Plugin 'vim-utils/vim-man'
 " Deep learning assisted YCM fork - works great but it requires a strong machine
 "Plugin 'zxqfl/tabnine-vim'
+" Takes care of annoying indentation when pasting
+Plugin 'roxma/vim-paste-easy'
 call vundle#end()
 
 "------------------------------------------------------------
