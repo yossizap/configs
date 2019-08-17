@@ -29,6 +29,8 @@ Plugin 'mileszs/ack.vim'
 Plugin 'andymass/vim-matchup'
 " ':Man <section> [page]'
 Plugin 'vim-utils/vim-man'
+" Deep learning assisted YCM fork - works great but it requires a strong machine
+"Plugin 'zxqfl/tabnine-vim'
 call vundle#end()
 
 "------------------------------------------------------------
@@ -311,6 +313,10 @@ let g:org_agenda_files = ['~/org/*.org']
 " Match-up settings
 " underline matching words, don't change the color of the match under the cursor
 hi MatchWord cterm=underline gui=underline
+
+" YCM/Tabnine settings
+" Disable auto completion window showing up as you type, use shift+space instead
+" let g:ycm_auto_trigger = 0
 
 " ack.vim settings
 " Use ag if available (silversearcher-ag)
