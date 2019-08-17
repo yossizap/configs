@@ -55,6 +55,9 @@ set hidden
 " line of a window
 set ruler
 
+" Display line number on the current line
+set number
+
 " Show the line number relative to the current line and the line number of 
 " the current line
 set relativenumber
@@ -133,6 +136,14 @@ set tw=500
 " Wrap mode up/down navigation with gj and gk
 map j gj
 map k gk
+
+" Center search results (zz - vertical line centering)
+nnoremap n nzz
+nnoremap N Nzz
+nnoremap * *zz
+nnoremap # #zz
+nnoremap g* g*zz
+nnoremap g# g#zz
 
 "------------------------------------------------------------
 " Theme settings
@@ -287,6 +298,11 @@ func! WordProcessorMode()
 endfu
 
 com! WP call WordProcessorMode()
+
+" Hotkey for better confirmation based substitute. Search results are centered unless they
+" are at the bottom of the page (zz - vertical line centering)
+com! -nargs=* -complete=command ZZWrap let &scrolloff=999 | exec <q-args> | let &so=0
+noremap <Leader>s "sy:ZZWrap .,%s///gc<Left><Left><Left><Left>
 
 "------------------------------------------------------------
 " Plugin settings
