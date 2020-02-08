@@ -4,12 +4,14 @@ filetype off
 set rtp+=~/.vim/bundle/Vundle.vim
 call vundle#begin()
 Plugin 'VundleVim/Vundle.vim'
-Plugin 'snipMate'
 Plugin 'scrooloose/nerdtree'
 Plugin 'tpope/vim-surround'
 "Plugin 'scrooloose/Syntastic'
 Plugin 'easymotion/vim-easymotion'
-Plugin 'garbas/vim-snipmate'
+" Improved snipmate. <c-j> <c-k> to move backwards/forwards in snippet fields
+"Plugin 'SirVer/ultisnips'
+" Snippets collection
+Plugin 'honza/vim-snippets'
 Plugin 'scrooloose/nerdcommenter'
 "Plugin 'davidhalter/jedi-vim'
 Plugin 'christoomey/vim-tmux-navigator'
@@ -21,6 +23,8 @@ Plugin 'majutsushi/tagbar'
 Plugin 'tpope/vim-speeddating'
 Plugin 'itchyny/calendar.vim'
 Plugin 'SyntaxRange'
+" Linting
+Plugin 'w0rp/ale'
 " :FZF [directory]
 Plugin 'junegunn/fzf'
 " In-file search plugin - :Ack [options] {pattern} [{directories}]
@@ -29,10 +33,23 @@ Plugin 'mileszs/ack.vim'
 Plugin 'andymass/vim-matchup'
 " ':Man <section> [page]'
 Plugin 'vim-utils/vim-man'
-" Deep learning assisted YCM fork - works great but it requires a strong machine
-"Plugin 'zxqfl/tabnine-vim'
-" Takes care of annoying indentation when pasting
-Plugin 'roxma/vim-paste-easy'
+" Deep learning assisted YCM fork - heavy
+" Plugin 'zxqfl/tabnine-vim'
+Plugin 'kergoth/vim-bitbake'
+" Run :ClangFormat on file or selected text
+Plugin 'rhysd/vim-clang-format'
+" Tmux syntax
+Plugin 'tmux-plugins/vim-tmux'
+" Kernel device tree syntax
+Plugin 'goldie-lin/vim-dts'
+" Mimic tmux's display-pane feature
+Plugin 't9md/vim-choosewin'
+" Fast and intuitive git :h gina-usage
+Plugin 'lambdalisue/gina.vim'
+" Jump to selected text on github
+Plugin 'danishprakash/vim-githubinator'
+" Run selected code
+Plugin 'thinca/vim-quickrun'
 call vundle#end()
 
 "------------------------------------------------------------
@@ -87,6 +104,9 @@ set scrolloff=1
 set encoding=UTF-8
 set term=xterm-256color
 set ffs=unix,dos,mac
+
+" Enable mouse support for coworkers
+set mouse=a
 
 "------------------------------------------------------------
 " History options
@@ -258,6 +278,9 @@ nnoremap <silent> <A-l> :wincmd l<CR>
 " Open NerdTree
 nnoremap <F4> <esc>:NERDTreeToggle<cr>
 
+" Open Tagbar
+nnoremap <F3> <esc>:Tagbar<cr>
+
 " Save as sudo
 cmap w!! w !sudo tee % > /dev/null
 
@@ -312,19 +335,27 @@ noremap <Leader>s "sy:ZZWrap .,%s///gc<Left><Left><Left><Left>
 " Plugin settings
 let g:org_agenda_files = ['~/org/*.org']
 
+" Clang-format settings
+" automatically detect the style file and apply the style when formatting
+let g:clang_format#detect_style_file = 1
+
 " Match-up settings
 " underline matching words, don't change the color of the match under the cursor
 hi MatchWord cterm=underline gui=underline
 
 " YCM/Tabnine settings
 " Disable auto completion window showing up as you type, use shift+space instead
-" let g:ycm_auto_trigger = 0
+let g:ycm_auto_trigger = 0
 
 " ack.vim settings
 " Use ag if available (silversearcher-ag)
 if executable('ag')
   let g:ackprg = 'ag --vimgrep'
 endif
+
+" ALE settings
+" Show cursor when hovering over highlited text
+let g:ale_echo_cursor = 0
 
 " Don't jump to the first result automatically
 cnoreabbrev Ack Ack!
