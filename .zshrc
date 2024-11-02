@@ -1,5 +1,5 @@
 # Path to your oh-my-zsh installation.
-export ZSH=/home/yossi/.oh-my-zsh
+export ZSH=/home/$USER/.oh-my-zsh
 
 # Set name of the theme to load.
 # Look in ~/.oh-my-zsh/themes/
@@ -45,11 +45,8 @@ ZSH_THEME="gentoo"
 # Would you like to use another custom folder than $ZSH/custom?
 # ZSH_CUSTOM=/path/to/new-custom-folder
 
-# Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
-# Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
-# Example format: plugins=(rails git textmate ruby lighthouse)
-# Add wisely, as too many plugins slow down shell startup.
-plugins=(git, mercurial, colored-man-pages)
+# Check the README's in ~/.oh-my-zsh/plugins/
+plugins=(git mercurial colored-man-pages colorize command-not-found fzf)
 
 # User configuration
 
@@ -58,7 +55,9 @@ plugins=(git, mercurial, colored-man-pages)
 
 source $ZSH/oh-my-zsh.sh
 
-export PATH="$PATH:/home/yossi/.cargo/bin"
+export PATH="$PATH:/home/$USER/.cargo/bin"
+
+export EDITOR="vim"
 
 # You may need to manually set your language environment
 # export LANG=en_US.UTF-8
@@ -69,6 +68,9 @@ export PATH="$PATH:/home/yossi/.cargo/bin"
 # else
 #   export EDITOR='mvim'
 # fi
+
+export EDITOR='vim'
+export DIFF_TOOL='vimdiff'
 
 # Compilation flags
 # export ARCHFLAGS="-arch x86_64"

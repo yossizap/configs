@@ -3,7 +3,7 @@ NVIM_CONFIG_DIR=~/.configs/nvim
 TMUX_CONFIG_ROOT=~/
 
 # Install dependencies
-sudo apt-get install vim tmux zsh exuberant-ctags
+sudo apt-get install vim tmux zsh exuberant-ctags cowsay fortune fzf
 
 # Replace zshrc's user home folder path with the current user
 sed -i .zshrc -e "s/yossi/$(whoami)/g"
@@ -13,11 +13,10 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/too
 
 # Copy configs
 rsync -ahv .vimrc .zshrc ~/
+sudo rsync -ahv .tmux.conf $TMUX_CONFIG_ROOT/
 
 mkdir -p $NVIM_CONFIG_DIR
 rsync -ahv .vimrc $NVIM_CONFIG_DIR/init.vim
-
-sudo rsync -ahv tmux.conf $TMUX_CONFIG_ROOT/tmux.conf
 
 # Copy vim theme
 mkdir -p ~/.vim/colors
@@ -33,5 +32,5 @@ if [ -x "$(command -v nvim)" ]; then
   nvim +PluginInstall +qall
 fi
 
-# Clone tpm for tmux resurrect
-git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+# Configure git
+git config --global diff.tool vimdiff
