@@ -4,31 +4,36 @@ filetype off
 set rtp+=~/.vim/bundle/Vundle.vim
 call vundle#begin()
 Plugin 'VundleVim/Vundle.vim'
+" File tree viewer
 Plugin 'scrooloose/nerdtree'
+" Delete/change/add parentheses/quotes/XML-tags/much more with ease - cs'"
 Plugin 'tpope/vim-surround'
-"Plugin 'scrooloose/Syntastic'
+" Unix commands in vim
+Plugin 'tpope/vim-eunuch'
+" Vimium like navigation:
 Plugin 'easymotion/vim-easymotion'
 " Improved snipmate. <c-j> <c-k> to move backwards/forwards in snippet fields
 "Plugin 'SirVer/ultisnips'
 " Snippets collection
 Plugin 'honza/vim-snippets'
+" Comment functions - \cs and \c<space>
 Plugin 'scrooloose/nerdcommenter'
-"Plugin 'davidhalter/jedi-vim'
+" Integration with tmux navigation shortcuts
 Plugin 'christoomey/vim-tmux-navigator'
+"Plugin 'melonmanchan/vim-tmux-resizer'
 Plugin 'vhda/verilog_systemverilog.vim'
 Plugin 'jceb/vim-orgmode'
 Plugin 'tpope/vim-repeat'
-Plugin 'taglist.vim'
 Plugin 'majutsushi/tagbar'
+" use CTRL-A/CTRL-X to increment dates, times, and more
 Plugin 'tpope/vim-speeddating'
 Plugin 'itchyny/calendar.vim'
-Plugin 'SyntaxRange'
 " Linting
-Plugin 'w0rp/ale'
+Plugin 'dense-analysis/ale'
 " :FZF [directory]
-Plugin 'junegunn/fzf'
-" In-file search plugin - :Ack [options] {pattern} [{directories}]
-Plugin 'mileszs/ack.vim'
+set rtp+=~/.fzf
+Plugin 'junegunn/fzf', { 'do': { -> fzf#install() } }
+Plugin 'junegunn/fzf.vim'
 " Switch between highlighted objects with %
 Plugin 'andymass/vim-matchup'
 " ':Man <section> [page]'
@@ -36,20 +41,40 @@ Plugin 'vim-utils/vim-man'
 " Deep learning assisted YCM fork - heavy
 " Plugin 'zxqfl/tabnine-vim'
 Plugin 'kergoth/vim-bitbake'
+" Run :AutoFormat on file or selected text
+Plugin 'vim-autoformat/vim-autoformat'
 " Run :ClangFormat on file or selected text
-Plugin 'rhysd/vim-clang-format'
+" Plugin 'rhysd/vim-clang-format'
 " Tmux syntax
 Plugin 'tmux-plugins/vim-tmux'
 " Kernel device tree syntax
 Plugin 'goldie-lin/vim-dts'
 " Mimic tmux's display-pane feature
 Plugin 't9md/vim-choosewin'
-" Fast and intuitive git :h gina-usage
-Plugin 'lambdalisue/gina.vim'
+" Git plugin - use :Git and then g? for help
+Plugin 'tpope/vim-fugitive'
 " Jump to selected text on github
 Plugin 'danishprakash/vim-githubinator'
 " Run selected code
-Plugin 'thinca/vim-quickrun'
+Plugin 'tpope/vim-dispatch'
+" FIXME Doesn't work? should let you auto complete text from other tmux planes
+Plugin 'wellle/tmux-complete.vim'
+" Use git style diffing(patience) in vimdiff
+Plugin 'chrisbra/vim-diff-enhanced'
+" Fuzzy search in file
+Plugin 'dyng/ctrlsf.vim'
+Plugin 'thinca/vim-logcat'
+Plugin 'makerj/vim-pdf'
+Plugin 'alderz/smali-vim'
+Plugin 'hsanson/vim-android'
+Plugin 'Speech'
+" Use :ContextToggle to show the function's context
+Plugin 'wellle/context.vim'
+Plugin 'leafgarland/typescript-vim'
+" Toggle zoom of current window within the current tab similarly to tmux's M-z
+Plugin 'dhruvasagar/vim-zoom'
+" Floating terminal window with Ctrl+t
+Plugin 'voldikss/vim-floaterm'
 call vundle#end()
 
 "------------------------------------------------------------
@@ -79,7 +104,7 @@ set ruler
 " Display line number on the current line
 set number
 
-" Show the line number relative to the current line and the line number of 
+" Show the line number relative to the current line and the line number of
 " the current line
 set relativenumber
 
@@ -169,6 +194,13 @@ nnoremap # #zz
 nnoremap g* g*zz
 nnoremap g# g#zz
 
+" Use easymotion in search
+"map  / <Plug>(easymotion-sn)
+"omap / <Plug>(easymotion-tn)
+"map  n <Plug>(easymotion-next)
+"map  N <Plug>(easymotion-prev)
+
+
 "------------------------------------------------------------
 " Theme settings
 
@@ -180,7 +212,7 @@ colorscheme molokai
 " Syntax-related settings
 
 " When opening a new line and no filetype-specific indenting is enabled, keep
-" the same indent as the line you're currently on. 
+" the same indent as the line you're currently on.
 set autoindent
 
 " Do smart autoindenting when starting a new line.
@@ -209,7 +241,7 @@ set cindent
 " c0 - indent comment to the start of the opener
 " U1 - do not ignore the indenting specified by { or u
 " ks - indent after for/while/if
-" (0 - When in unclosed parentheses, indent N characters from the line with the 
+" (0 - When in unclosed parentheses, indent N characters from the line with the
 "      unclosed parentheses
 set cino=b1,c0,U1,ks
 
@@ -252,15 +284,13 @@ set equalalways
 "------------------------------------------------------------
 " File settings
 
-" Remember position when reopening file
-
-" Write the contents of the file, if it has been modified, on each :next, 
+" Write the contents of the file, if it has been modified, on each :next,
 " :rewind, :last, :make, etc.
 set autowrite
 
 " Make a backup before overwriting a file.  Leave it around after the
 " file has been successfully written.
-set backup
+"set backup
 
 "------------------------------------------------------------
 " Key mappings
@@ -274,15 +304,16 @@ nnoremap <silent> <A-h> :wincmd h<CR>
 nnoremap <silent> <A-j> :wincmd j<CR>
 nnoremap <silent> <A-k> :wincmd k<CR>
 nnoremap <silent> <A-l> :wincmd l<CR>
+nnoremap <silent> <A-Left> :wincmd h<CR>
+nnoremap <silent> <A-Down> :wincmd j<CR>
+nnoremap <silent> <A-Up> :wincmd k<CR>
+nnoremap <silent> <A-Right> :wincmd l<CR>
 
 " Open NerdTree
 nnoremap <F4> <esc>:NERDTreeToggle<cr>
 
 " Open Tagbar
 nnoremap <F3> <esc>:Tagbar<cr>
-
-" Save as sudo
-cmap w!! w !sudo tee % > /dev/null
 
 " Overwrite vim-tmux-navigator keybindings with Alt-*
 let g:tmux_navigator_no_mappings = 0
@@ -291,12 +322,62 @@ nnoremap <silent> <M-j> :TmuxNavigateDown<cr>
 nnoremap <silent> <M-k> :TmuxNavigateUp<cr>
 nnoremap <silent> <M-l> :TmuxNavigateRight<cr>
 nnoremap <silent> <M-\> :TmuxNavigatePrevious<cr>
+nnoremap <silent> <A-h> :TmuxNavigateLeft<cr>
+nnoremap <silent> <A-j> :TmuxNavigateDown<cr>
+nnoremap <silent> <A-k> :TmuxNavigateUp<cr>
+nnoremap <silent> <A-l> :TmuxNavigateRight<cr>
+nnoremap <silent> <A-Left> :TmuxNavigateLeft<cr>
+nnoremap <silent> <A-Down> :TmuxNavigateDown<cr>
+nnoremap <silent> <A-Up> :TmuxNavigateUp<cr>
+nnoremap <silent> <A-Right> :TmuxNavigateRight<cr>
 
 " Toggle spell check
 nnoremap <F8> :setlocal spell! spelllang=en_us<CR>
 
 " Escape by uncommon sequence
 inoremap jj <Esc>
+
+" Continue resizing the window with (^W)>/</+/- instead of retyping ^W+ each time(^W>^W>^W+)
+" Similar to tmux C-b M-Up/Down/Left/Right
+nmap          <C-W>+     <C-W>+<SID>ws
+nmap          <C-W>-     <C-W>-<SID>ws
+nmap          <C-W>>     <C-W>><SID>ws
+nmap          <C-W><     <C-W><<SID>ws
+nn <script>   <SID>ws+   <C-W>+<SID>ws
+nn <script>   <SID>ws-   <C-W>-<SID>ws
+nn <script>   <SID>ws>   <C-W>><SID>ws
+nn <script>   <SID>ws<   <C-W><<SID>ws
+nmap          <SID>ws    <Nop>
+
+" Open the FZF navigator with Ctrl+p
+nnoremap <C-p> :FZF<CR>
+
+" Map Ctrl+f to search file content with FZF using ripgrep
+nnoremap <C-f> :Rg<CR>
+
+" Open fugitive window with Ctrl+g
+noremap <C-g> :Git<Cr>
+
+" Use tmux style pane zoom in vim windows with Ctrl+w+z
+nmap <C-W>z <Plug>(zoom-toggle)
+
+vnoremap <silent> <Leader>f :Autoformat<CR>
+
+" Create a new float term with Ctrl + t
+nnoremap <silent> <C-t> :FloatermToggle<CR>
+tnoremap <silent> <C-t> <C-\><C-n>:FloatermToggle<CR>
+
+" Save as sudo
+cmap w!! SudoWrite
+
+" Map shift+f to easymotion prefix
+nnoremap <F> <Plug>(easymotion-prefix)
+
+" Use \hjkl for easy motion direction
+map <Leader>l <Plug>(easymotion-lineforward)
+map <Leader>j <Plug>(easymotion-j)
+map <Leader>k <Plug>(easymotion-k)
+map <Leader>h <Plug>(easymotion-linebackward)
 
 " TODO: Run scripts and makefiles
 
@@ -309,7 +390,7 @@ set foldminlines=3
 " Number of fold columns display on the left side of the screen
 set foldcolumn=1
 
-" Folds are defined by syntax highlighting 
+" Folds are defined by syntax highlighting
 set foldmethod=syntax
 
 " Ensure all folds are open up to a ridiculous nesting level
@@ -335,6 +416,15 @@ noremap <Leader>s "sy:ZZWrap .,%s///gc<Left><Left><Left><Left>
 " Plugin settings
 let g:org_agenda_files = ['~/org/*.org']
 
+" FIXME Tmux complete settings
+let g:tmuxcomplete#trigger = 'completefunc'
+
+" Enhanced diff settings
+" Automatically set diffexpr to patience when vim is started In diff-mode
+if &diff
+    let &diffexpr='EnhancedDiff#Diff("git diff", "--diff-algorithm=patience")'
+endif
+
 " Clang-format settings
 " automatically detect the style file and apply the style when formatting
 let g:clang_format#detect_style_file = 1
@@ -345,34 +435,49 @@ hi MatchWord cterm=underline gui=underline
 
 " YCM/Tabnine settings
 " Disable auto completion window showing up as you type, use shift+space instead
-let g:ycm_auto_trigger = 0
-
-" ack.vim settings
-" Use ag if available (silversearcher-ag)
-if executable('ag')
-  let g:ackprg = 'ag --vimgrep'
-endif
+"let g:ycm_auto_trigger = 0
 
 " ALE settings
-" Show cursor when hovering over highlited text
-let g:ale_echo_cursor = 0
+" Show error when hovering over highlited text
+let g:ale_echo_cursor = 1
+let g:ale_sign_column_always = 1
+" ALE error message formatting
+let g:ale_sign_error = '>>'
+let g:ale_sign_warning = '--'
+let g:ale_echo_msg_error_str = 'E'
+let g:ale_echo_msg_warning_str = 'W'
+let g:ale_echo_msg_format = '[%linter%] %s [%severity%]'
+" Disable inlined ale errors
+let g:ale_virtualtext_cursor=0
 
-" Don't jump to the first result automatically
-cnoreabbrev Ack Ack!
-nnoremap <Leader>a :Ack!<Space>
-
+" FZF settings
 " Customize fzf colors to match vim's color scheme
 let g:fzf_colors =
-\ { 'fg':      ['fg', 'Normal'],
-\ 'bg':      ['bg', 'Normal'],
-\ 'hl':      ['fg', 'Comment'],
-\ 'fg+':     ['fg', 'CursorLine', 'CursorColumn', 'Normal'],
-\ 'bg+':     ['bg', 'CursorLine', 'CursorColumn'],
-\ 'hl+':     ['fg', 'Statement'],
-\ 'info':    ['fg', 'PreProc'],
-\ 'border':  ['fg', 'Ignore'],
-\ 'prompt':  ['fg', 'Conditional'],
-\ 'pointer': ['fg', 'Exception'],
-\ 'marker':  ['fg', 'Keyword'],
-\ 'spinner': ['fg', 'Label'],
-\ 'header':  ['fg', 'Comment'] }
+            \ { 'fg':      ['fg', 'Normal'],
+            \ 'bg':      ['bg', 'Normal'],
+            \ 'hl':      ['fg', 'Comment'],
+            \ 'fg+':     ['fg', 'CursorLine', 'CursorColumn', 'Normal'],
+            \ 'bg+':     ['bg', 'CursorLine', 'CursorColumn'],
+            \ 'hl+':     ['fg', 'Statement'],
+            \ 'info':    ['fg', 'PreProc'],
+            \ 'border':  ['fg', 'Ignore'],
+            \ 'prompt':  ['fg', 'Conditional'],
+            \ 'pointer': ['fg', 'Exception'],
+            \ 'marker':  ['fg', 'Keyword'],
+            \ 'spinner': ['fg', 'Label'],
+            \ 'header':  ['fg', 'Comment'] }
+
+" EasyMotion settings
+" keep cursor column with JK motion
+let g:EasyMotion_startofline = 0 
+" Similar to Vim's smartcase option -  " type `l` and match `l`&`L`
+let g:EasyMotion_smartcase = 1
+
+" Context settings
+" Disable context plugin, use manually when lost
+let g:context_enabled = 1
+
+" NERDTree settings
+" Fix hjkl tmux movemenet when in NERDTree's file tree
+let g:NERDTreeMapJumpPrevSibling=""
+let g:NERDTreeMapJumpNextSibling=""

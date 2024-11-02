@@ -12,6 +12,7 @@ sudo apt update
 
 echo "Installing basic utilities..."
 sudo apt-get install -y tmux zsh universal-ctags cowsay fortune
+sudo apt-get remove vim
 
 if $VIM_FROM_SOURCE; then
     # Install VIM build dependencies
