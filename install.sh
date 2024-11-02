@@ -109,9 +109,9 @@ git clone https://github.com/VundleVim/Vundle.vim.git $VIM_CONFIG_DIR/bundle/Vun
 
 # Install vim plugins with Vundle
 echo "Installing Vim plugins with Vundle..."
-vim +PluginInstall +qall
+vim +PlugInstall +qall
 if command -v nvim &> /dev/null; then
-    nvim +PluginInstall +qall
+    nvim +PlugInstall +qall
 fi
 
 # Configure git
