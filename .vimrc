@@ -1,81 +1,85 @@
 "------------------------------------------------------------
 " Plugins - Run :PluginUpdate once in a while, :PluginInstall for new plugins
 filetype off
-set rtp+=~/.vim/bundle/Vundle.vim
-call vundle#begin()
-Plugin 'VundleVim/Vundle.vim'
+if empty(glob('~/.vim/autoload/plug.vim'))
+silent !curl -fLo ~/.vim/autoload/plug.vim --create-dirs
+\ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
+endif
+
+
+call plug#begin('~/.vim/plugged')
 " File tree viewer
-Plugin 'scrooloose/nerdtree'
-" Delete/change/add parentheses/quotes/XML-tags/much more with ease - cs'"
-Plugin 'tpope/vim-surround'
-" Unix commands in vim
-Plugin 'tpope/vim-eunuch'
-" Vimium like navigation:
-Plugin 'easymotion/vim-easymotion'
-" Improved snipmate. <c-j> <c-k> to move backwards/forwards in snippet fields
-"Plugin 'SirVer/ultisnips'
-" Snippets collection
-Plugin 'honza/vim-snippets'
+Plug 'scrooloose/nerdtree'
 " Comment functions - \cs and \c<space>
-Plugin 'scrooloose/nerdcommenter'
+Plug 'scrooloose/nerdcommenter'
+" Delete/change/add parentheses/quotes/XML-tags/much more with ease - cs'"
+Plug 'tpope/vim-surround'
+" Unix commands in vim
+Plug 'tpope/vim-eunuch'
+" Vimium like navigation
+Plug 'easymotion/vim-easymotion'
+" Improved snipmate. <c-j> <c-k> to move backwards/forwards in snippet fields.
+" :UltiSnipsEdit for an editable list of snippets
+Plug 'sirver/ultisnips'
+" " Snippets are separated from the engine
+Plug 'honza/vim-snippets'
 " Integration with tmux navigation shortcuts
-Plugin 'christoomey/vim-tmux-navigator'
-"Plugin 'melonmanchan/vim-tmux-resizer'
-Plugin 'vhda/verilog_systemverilog.vim'
-Plugin 'jceb/vim-orgmode'
-Plugin 'tpope/vim-repeat'
-Plugin 'majutsushi/tagbar'
+Plug 'christoomey/vim-tmux-navigator'
+" Verilog/SystemVerilog Syntax and Omni-completion
+Plug 'vhda/verilog_systemverilog.vim'
+" Remaps `.` in a way that plugins can tap into it
+Plug 'tpope/vim-repeat'
+" Browse the tags of the current file and get an overview of its structure with F3
+Plug 'majutsushi/tagbar'
 " use CTRL-A/CTRL-X to increment dates, times, and more
-Plugin 'tpope/vim-speeddating'
-Plugin 'itchyny/calendar.vim'
+Plug 'tpope/vim-speeddating'
 " Linting
-Plugin 'dense-analysis/ale'
+Plug 'dense-analysis/ale'
 " :FZF [directory]
 set rtp+=~/.fzf
-Plugin 'junegunn/fzf', { 'do': { -> fzf#install() } }
-Plugin 'junegunn/fzf.vim'
+Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
+Plug 'junegunn/fzf.vim'
 " Switch between highlighted objects with %
-Plugin 'andymass/vim-matchup'
+Plug 'andymass/vim-matchup'
 " ':Man <section> [page]'
-Plugin 'vim-utils/vim-man'
-" Deep learning assisted YCM fork - heavy
-" Plugin 'zxqfl/tabnine-vim'
-Plugin 'kergoth/vim-bitbake'
+Plug 'vim-utils/vim-man'
+" Bitbake tool and format support
+Plug 'kergoth/vim-bitbake'
 " Run :AutoFormat on file or selected text
-Plugin 'vim-autoformat/vim-autoformat'
+Plug 'vim-autoformat/vim-autoformat'
 " Run :ClangFormat on file or selected text
-" Plugin 'rhysd/vim-clang-format'
+Plug 'rhysd/vim-clang-format'
 " Tmux syntax
-Plugin 'tmux-plugins/vim-tmux'
+Plug 'tmux-plugins/vim-tmux'
 " Kernel device tree syntax
-Plugin 'goldie-lin/vim-dts'
+Plug 'goldie-lin/vim-dts'
 " Mimic tmux's display-pane feature
-Plugin 't9md/vim-choosewin'
+Plug 't9md/vim-choosewin'
 " Git plugin - use :Git and then g? for help
-Plugin 'tpope/vim-fugitive'
+Plug 'tpope/vim-fugitive'
 " Jump to selected text on github
-Plugin 'danishprakash/vim-githubinator'
+Plug 'danishprakash/vim-githubinator'
 " Run selected code
-Plugin 'tpope/vim-dispatch'
-" FIXME Doesn't work? should let you auto complete text from other tmux planes
-Plugin 'wellle/tmux-complete.vim'
+Plug 'tpope/vim-dispatch'
 " Use git style diffing(patience) in vimdiff
-Plugin 'chrisbra/vim-diff-enhanced'
-" Fuzzy search in file
-Plugin 'dyng/ctrlsf.vim'
-Plugin 'thinca/vim-logcat'
-Plugin 'makerj/vim-pdf'
-Plugin 'alderz/smali-vim'
-Plugin 'hsanson/vim-android'
-Plugin 'Speech'
+Plug 'chrisbra/vim-diff-enhanced'
+" Lets VIM read PDF files in text format using the pdftotext utility
+Plug 'makerj/vim-pdf'
 " Use :ContextToggle to show the function's context
-Plugin 'wellle/context.vim'
-Plugin 'leafgarland/typescript-vim'
+Plug 'wellle/context.vim'
 " Toggle zoom of current window within the current tab similarly to tmux's M-z
-Plugin 'dhruvasagar/vim-zoom'
+Plug 'dhruvasagar/vim-zoom'
 " Floating terminal window with Ctrl+t
-Plugin 'voldikss/vim-floaterm'
-call vundle#end()
+Plug 'voldikss/vim-floaterm'
+" Distraction free vim mode, enter with :Goyo
+Plug 'junegunn/goyo.vim'
+" Hyperfocus-writing in Vim, enter with :Limelight exit with :Limelight!
+Plug 'junegunn/limelight.vim'
+" Optional deep learning assisted YCM fork - heavy
+" Plug 'zxqfl/tabnine-vim'
+Plug 'vim-scripts/speech'
+call plug#end()
 
 "------------------------------------------------------------
 " Misc options
@@ -91,6 +95,11 @@ filetype indent plugin on
 
 " Enable syntax highlighting
 syntax on
+
+" the screen will not be redrawn while executing macros, registers and other commands 
+" that have not been typed. Also, updating the window title is postponed. To force an
+" update use :redraw. 
+set lazyredraw 
 
 " When on a buffer becomes hidden when it is abandoned. Allows reusing the same
 " window and switching from an unused buffer without saving it first. Also allows
@@ -269,6 +278,7 @@ set wildignorecase
 
 " Ignore temp/binary files
 set wildignore=*.a,*.o,*.pyc,*.pyo,*~
+set wildignore+=*.swp,*.zip,*.exe,*.class
 
 "------------------------------------------------------------
 " Window/split settings
@@ -449,6 +459,9 @@ let g:ale_echo_msg_warning_str = 'W'
 let g:ale_echo_msg_format = '[%linter%] %s [%severity%]'
 " Disable inlined ale errors
 let g:ale_virtualtext_cursor=0
+" Highlight error/warning line
+highlight ALEErrorSign ctermbg=NONE ctermfg=Red
+highlight ALEWarningSign ctermbg=NONE ctermfg=Yellow
 
 " FZF settings
 " Customize fzf colors to match vim's color scheme
@@ -475,9 +488,37 @@ let g:EasyMotion_smartcase = 1
 
 " Context settings
 " Disable context plugin, use manually when lost
-let g:context_enabled = 1
+let g:context_enabled = 0
 
 " NERDTree settings
 " Fix hjkl tmux movemenet when in NERDTree's file tree
 let g:NERDTreeMapJumpPrevSibling=""
 let g:NERDTreeMapJumpNextSibling=""
+
+" UltiSnip settings
+" Trigger configuration
+let g:UltiSnipsExpandTrigger="<tab>"
+let g:UltiSnipsJumpForwardTrigger="<c-b>"
+let g:UltiSnipsJumpBackwardTrigger="<c-z>"
+" If you want :UltiSnipsEdit to split your window.
+let g:UltiSnipsEditSplit="vertical"
+
+" Lightlime settings
+" Color name (:help cterm-colors) or ANSI code
+let g:limelight_conceal_ctermfg = 'gray'
+let g:limelight_conceal_ctermfg = 240
+" Color name (:help gui-colors) or RGB color
+let g:limelight_conceal_guifg = 'DarkGray'
+let g:limelight_conceal_guifg = '#777777'
+" Default: 0.5
+let g:limelight_default_coefficient = 0.7
+" Highlighting priority (default: 10)
+"   Set it to -1 not to overrule hlsearch
+let g:limelight_priority = -1
+
+" Goyo settings
+" Enter limelight mode when entering goyo
+autocmd! User GoyoEnter Limelight
+autocmd! User GoyoLeave Limelight!
+" Adjust goyo width from the default 80
+let g:goyo_width=100
