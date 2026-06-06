@@ -1,18 +1,12 @@
 "------------------------------------------------------------
-" Plugins - Run :PluginUpdate once in a while, :PluginInstall for new plugins
+" Plugins - Run :PlugUpdate once in a while, :PlugInstall for new plugins
 filetype off
-if empty(glob('~/.vim/autoload/plug.vim'))
-silent !curl -fLo ~/.vim/autoload/plug.vim --create-dirs
-\ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
-endif
-
-
+if !empty(glob('~/.vim/autoload/plug.vim'))
 call plug#begin('~/.vim/plugged')
-" File tree viewer
-Plug 'scrooloose/nerdtree'
+" Use explicit Alt-* mappings instead of vim-tmux-navigator's default Ctrl-* mappings.
+let g:tmux_navigator_no_mappings = 1
 " Comment functions - \cs and \c<space>
-Plug 'scrooloose/nerdcommenter'
+Plug 'preservim/nerdcommenter'
 " Delete/change/add parentheses/quotes/XML-tags/much more with ease - cs'"
 Plug 'tpope/vim-surround'
 " Unix commands in vim
@@ -21,7 +15,9 @@ Plug 'tpope/vim-eunuch'
 Plug 'easymotion/vim-easymotion'
 " Improved snipmate. <c-j> <c-k> to move backwards/forwards in snippet fields.
 " :UltiSnipsEdit for an editable list of snippets
-Plug 'sirver/ultisnips'
+if has('python3')
+Plug 'sirver/ultisnips', { 'tag': '3.2' }
+endif
 " " Snippets are separated from the engine
 Plug 'honza/vim-snippets'
 " Integration with tmux navigation shortcuts
@@ -58,14 +54,10 @@ Plug 'goldie-lin/vim-dts'
 Plug 't9md/vim-choosewin'
 " Git plugin - use :Git and then g? for help
 Plug 'tpope/vim-fugitive'
-" Jump to selected text on github
-Plug 'danishprakash/vim-githubinator'
 " Run selected code
 Plug 'tpope/vim-dispatch'
 " Use git style diffing(patience) in vimdiff
 Plug 'chrisbra/vim-diff-enhanced'
-" Lets VIM read PDF files in text format using the pdftotext utility
-Plug 'makerj/vim-pdf'
 " Use :ContextToggle to show the function's context
 Plug 'wellle/context.vim'
 " Toggle zoom of current window within the current tab similarly to tmux's M-z
@@ -76,10 +68,30 @@ Plug 'voldikss/vim-floaterm'
 Plug 'junegunn/goyo.vim'
 " Hyperfocus-writing in Vim, enter with :Limelight exit with :Limelight!
 Plug 'junegunn/limelight.vim'
+" Colorschemes
+Plug 'morhetz/gruvbox'
+Plug 'dracula/vim', { 'as': 'dracula' }
+Plug 'altercation/vim-colors-solarized'
+Plug 'joshdick/onedark.vim'
+Plug 'NLKNguyen/papercolor-theme'
+Plug 'ayu-theme/ayu-vim'
+Plug 'junegunn/seoul256.vim'
+Plug 'nanotech/jellybeans.vim'
+Plug 'arcticicestudio/nord-vim'
+Plug 'sainnhe/everforest'
+Plug 'sainnhe/gruvbox-material'
+Plug 'sainnhe/edge'
+Plug 'sainnhe/sonokai'
+Plug 'cocopon/iceberg.vim'
+Plug 'rakr/vim-one'
+Plug 'jacoborus/tender.vim'
+Plug 'bluz71/vim-moonfly-colors'
+Plug 'bluz71/vim-nightfly-colors'
+Plug 'fenetikm/falcon'
 " Optional deep learning assisted YCM fork - heavy
 " Plug 'zxqfl/tabnine-vim'
-Plug 'vim-scripts/speech'
 call plug#end()
+endif
 
 "------------------------------------------------------------
 " Misc options
@@ -129,14 +141,13 @@ set visualbell
 set t_vb=
 
 " Prevent automatically leaving indentation mode after a single indentation
-vmap > >gv
-vmap < <gv
+xnoremap > >gv
+xnoremap < <gv
 
 " Minimal number of screen lines to keep above and below the cursor.
 set scrolloff=1
 
 set encoding=UTF-8
-set term=xterm-256color
 set ffs=unix,dos,mac
 
 " Enable mouse support for coworkers
@@ -145,11 +156,13 @@ set mouse=a
 "------------------------------------------------------------
 " History options
 
+call mkdir($HOME . '/.vim/undo', 'p')
+call mkdir($HOME . '/.vim/swap', 'p')
 set undodir=$HOME/.vim/undo
+set directory^=$HOME/.vim/swap//
 set undolevels=1000
 set undoreload=10000
 set undofile
-set noswapfile
 set history=1000
 
 "------------------------------------------------------------
@@ -189,11 +202,10 @@ set is
 set autoread
 set nowb
 set lbr
-set tw=500
 
 " Wrap mode up/down navigation with gj and gk
-map j gj
-map k gk
+nnoremap j gj
+nnoremap k gk
 
 " Center search results (zz - vertical line centering)
 nnoremap n nzz
@@ -209,13 +221,6 @@ nnoremap g# g#zz
 "map  n <Plug>(easymotion-next)
 "map  N <Plug>(easymotion-prev)
 
-
-"------------------------------------------------------------
-" Theme settings
-
-set background=dark
-set t_Co=256
-colorscheme molokai
 
 "------------------------------------------------------------
 " Syntax-related settings
@@ -243,19 +248,13 @@ set smarttab
 set shiftwidth=4
 set softtabstop=4
 
-" Get the amount of indent for line {lnum} according the C indenting rules
-set cindent
-
 " t0 - don't indent return types
 " c0 - indent comment to the start of the opener
 " U1 - do not ignore the indenting specified by { or u
 " ks - indent after for/while/if
 " (0 - When in unclosed parentheses, indent N characters from the line with the
 "      unclosed parentheses
-set cino=b1,c0,U1,ks
-
-" C - Automatically re-indent once the user is done typing the line (on ';')
-set cink+=*;
+autocmd FileType c,cpp,objc,objcpp,verilog,systemverilog setlocal cindent cinoptions=b1,c0,U1,ks cinkeys+=*;
 
 " Disable text wrap
 set nowrap
@@ -307,39 +306,81 @@ set autowrite
 
 " Map Y to act like D and C, i.e. to yank until EOL, rather than act as yy,
 " which is the default
-nmap Y y$
-
-" Switch between splits with alt + hjkl
-nnoremap <silent> <A-h> :wincmd h<CR>
-nnoremap <silent> <A-j> :wincmd j<CR>
-nnoremap <silent> <A-k> :wincmd k<CR>
-nnoremap <silent> <A-l> :wincmd l<CR>
-nnoremap <silent> <A-Left> :wincmd h<CR>
-nnoremap <silent> <A-Down> :wincmd j<CR>
-nnoremap <silent> <A-Up> :wincmd k<CR>
-nnoremap <silent> <A-Right> :wincmd l<CR>
-
-" Open NerdTree
-nnoremap <F4> <esc>:NERDTreeToggle<cr>
+nnoremap Y y$
 
 " Open Tagbar
 nnoremap <F3> <esc>:Tagbar<cr>
 
-" Overwrite vim-tmux-navigator keybindings with Alt-*
-let g:tmux_navigator_no_mappings = 0
-nnoremap <silent> <M-h> :TmuxNavigateLeft<cr>
-nnoremap <silent> <M-j> :TmuxNavigateDown<cr>
-nnoremap <silent> <M-k> :TmuxNavigateUp<cr>
-nnoremap <silent> <M-l> :TmuxNavigateRight<cr>
-nnoremap <silent> <M-\> :TmuxNavigatePrevious<cr>
-nnoremap <silent> <A-h> :TmuxNavigateLeft<cr>
-nnoremap <silent> <A-j> :TmuxNavigateDown<cr>
-nnoremap <silent> <A-k> :TmuxNavigateUp<cr>
-nnoremap <silent> <A-l> :TmuxNavigateRight<cr>
-nnoremap <silent> <A-Left> :TmuxNavigateLeft<cr>
-nnoremap <silent> <A-Down> :TmuxNavigateDown<cr>
-nnoremap <silent> <A-Up> :TmuxNavigateUp<cr>
-nnoremap <silent> <A-Right> :TmuxNavigateRight<cr>
+function! s:TmuxNavigateVertical(direction) abort
+    let l:before = winnr()
+    if a:direction ==# 'j'
+        wincmd j
+    else
+        wincmd k
+    endif
+    if winnr() != l:before
+        return
+    endif
+
+    if winnr('$') > 1
+        if a:direction ==# 'j'
+            wincmd t
+        else
+            wincmd b
+        endif
+        return
+    endif
+
+    if !empty($TMUX) && !empty($TMUX_PANE)
+        let l:socket = split($TMUX, ',')[0]
+        let l:edge = a:direction ==# 'j' ? 'bottom' : 'top'
+        let l:tmux_direction = a:direction ==# 'j' ? '-D' : '-U'
+        let l:at_edge = system('tmux -S ' . shellescape(l:socket) . ' display-message -p -t ' . shellescape($TMUX_PANE) . ' "#{pane_at_' . l:edge . '}"')
+        if v:shell_error == 0 && l:at_edge =~# '^0'
+            call system('tmux -S ' . shellescape(l:socket) . ' select-pane -t ' . shellescape($TMUX_PANE) . ' ' . l:tmux_direction)
+            return
+        endif
+    endif
+endfunction
+
+silent! nunmap <C-h>
+silent! nunmap <C-j>
+silent! nunmap <C-k>
+silent! nunmap <C-l>
+silent! tunmap <C-h>
+silent! tunmap <C-j>
+silent! tunmap <C-k>
+silent! tunmap <C-l>
+
+nnoremap <silent> <M-h> :<C-U>TmuxNavigateLeft<cr>
+nnoremap <silent> <M-j> :<C-U>call <SID>TmuxNavigateVertical('j')<cr>
+nnoremap <silent> <M-k> :<C-U>call <SID>TmuxNavigateVertical('k')<cr>
+nnoremap <silent> <M-l> :<C-U>TmuxNavigateRight<cr>
+nnoremap <silent> <M-\> :<C-U>TmuxNavigatePrevious<cr>
+nnoremap <silent> <A-h> :<C-U>TmuxNavigateLeft<cr>
+nnoremap <silent> <A-j> :<C-U>call <SID>TmuxNavigateVertical('j')<cr>
+nnoremap <silent> <A-k> :<C-U>call <SID>TmuxNavigateVertical('k')<cr>
+nnoremap <silent> <A-l> :<C-U>TmuxNavigateRight<cr>
+nnoremap <silent> <A-Left> :<C-U>TmuxNavigateLeft<cr>
+nnoremap <silent> <A-Down> :<C-U>call <SID>TmuxNavigateVertical('j')<cr>
+nnoremap <silent> <A-Up> :<C-U>call <SID>TmuxNavigateVertical('k')<cr>
+nnoremap <silent> <A-Right> :<C-U>TmuxNavigateRight<cr>
+nnoremap <silent> <Esc>h :<C-U>TmuxNavigateLeft<cr>
+nnoremap <silent> <Esc>j :<C-U>call <SID>TmuxNavigateVertical('j')<cr>
+nnoremap <silent> <Esc>k :<C-U>call <SID>TmuxNavigateVertical('k')<cr>
+nnoremap <silent> <Esc>l :<C-U>TmuxNavigateRight<cr>
+execute "nnoremap <silent> \e[1;3B :<C-U>call <SID>TmuxNavigateVertical('j')<cr>"
+execute "nnoremap <silent> \e[1;3A :<C-U>call <SID>TmuxNavigateVertical('k')<cr>"
+execute "nnoremap <silent> \e[1;3D :<C-U>TmuxNavigateLeft<cr>"
+execute "nnoremap <silent> \e[1;3C :<C-U>TmuxNavigateRight<cr>"
+tnoremap <silent> <M-h> <C-\><C-n>:<C-U>TmuxNavigateLeft<cr>
+tnoremap <silent> <M-j> <C-\><C-n>:<C-U>call <SID>TmuxNavigateVertical('j')<cr>
+tnoremap <silent> <M-k> <C-\><C-n>:<C-U>call <SID>TmuxNavigateVertical('k')<cr>
+tnoremap <silent> <M-l> <C-\><C-n>:<C-U>TmuxNavigateRight<cr>
+tnoremap <silent> <A-Left> <C-\><C-n>:<C-U>TmuxNavigateLeft<cr>
+tnoremap <silent> <A-Down> <C-\><C-n>:<C-U>call <SID>TmuxNavigateVertical('j')<cr>
+tnoremap <silent> <A-Up> <C-\><C-n>:<C-U>call <SID>TmuxNavigateVertical('k')<cr>
+tnoremap <silent> <A-Right> <C-\><C-n>:<C-U>TmuxNavigateRight<cr>
 
 " Toggle spell check
 nnoremap <F8> :setlocal spell! spelllang=en_us<CR>
@@ -366,7 +407,7 @@ nnoremap <C-p> :FZF<CR>
 nnoremap <C-f> :Rg<CR>
 
 " Open fugitive window with Ctrl+g
-noremap <C-g> :Git<Cr>
+nnoremap <C-g> :Git<Cr>
 
 " Use tmux style pane zoom in vim windows with Ctrl+w+z
 nmap <C-W>z <Plug>(zoom-toggle)
@@ -380,14 +421,14 @@ tnoremap <silent> <C-t> <C-\><C-n>:FloatermToggle<CR>
 " Save as sudo
 cmap w!! SudoWrite
 
-" Map shift+f to easymotion prefix
-nnoremap <F> <Plug>(easymotion-prefix)
+" EasyMotion prefix
+nmap <Leader><Leader> <Plug>(easymotion-prefix)
 
 " Use \hjkl for easy motion direction
-map <Leader>l <Plug>(easymotion-lineforward)
-map <Leader>j <Plug>(easymotion-j)
-map <Leader>k <Plug>(easymotion-k)
-map <Leader>h <Plug>(easymotion-linebackward)
+nmap <Leader>l <Plug>(easymotion-lineforward)
+nmap <Leader>j <Plug>(easymotion-j)
+nmap <Leader>k <Plug>(easymotion-k)
+nmap <Leader>h <Plug>(easymotion-linebackward)
 
 " TODO: Run scripts and makefiles
 
@@ -400,8 +441,8 @@ set foldminlines=3
 " Number of fold columns display on the left side of the screen
 set foldcolumn=1
 
-" Folds are defined by syntax highlighting
-set foldmethod=syntax
+" Keep folds manual by default; syntax folds are expensive in large source files.
+set foldmethod=manual
 
 " Ensure all folds are open up to a ridiculous nesting level
 set foldlevel=100
@@ -420,7 +461,7 @@ com! WP call WordProcessorMode()
 " Hotkey for better confirmation based substitute. Search results are centered unless they
 " are at the bottom of the page (zz - vertical line centering)
 com! -nargs=* -complete=command ZZWrap let &scrolloff=999 | exec <q-args> | let &so=0
-noremap <Leader>s "sy:ZZWrap .,%s///gc<Left><Left><Left><Left>
+nnoremap <Leader>s "sy:ZZWrap .,%s///gc<Left><Left><Left><Left>
 
 "------------------------------------------------------------
 " Plugin settings
@@ -490,18 +531,15 @@ let g:EasyMotion_smartcase = 1
 " Disable context plugin, use manually when lost
 let g:context_enabled = 0
 
-" NERDTree settings
-" Fix hjkl tmux movemenet when in NERDTree's file tree
-let g:NERDTreeMapJumpPrevSibling=""
-let g:NERDTreeMapJumpNextSibling=""
-
 " UltiSnip settings
+if has('python3')
 " Trigger configuration
 let g:UltiSnipsExpandTrigger="<tab>"
-let g:UltiSnipsJumpForwardTrigger="<c-b>"
-let g:UltiSnipsJumpBackwardTrigger="<c-z>"
+let g:UltiSnipsJumpForwardTrigger="<c-j>"
+let g:UltiSnipsJumpBackwardTrigger="<c-k>"
 " If you want :UltiSnipsEdit to split your window.
 let g:UltiSnipsEditSplit="vertical"
+endif
 
 " Lightlime settings
 " Color name (:help cterm-colors) or ANSI code
@@ -522,3 +560,22 @@ autocmd! User GoyoEnter Limelight
 autocmd! User GoyoLeave Limelight!
 " Adjust goyo width from the default 80
 let g:goyo_width=100
+
+"------------------------------------------------------------
+" Theme settings
+
+set background=dark
+set t_Co=256
+if has('termguicolors')
+    set termguicolors
+endif
+let s:theme_file = expand('~/.vim/theme.vim')
+if filereadable(s:theme_file)
+    execute 'source' fnameescape(s:theme_file)
+else
+    colorscheme molokai
+endif
+
+if filereadable(expand('~/.vimrc.local'))
+    execute 'source' fnameescape(expand('~/.vimrc.local'))
+endif
