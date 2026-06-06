@@ -1,0 +1,354 @@
+#!/usr/bin/env python3
+import curses
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+from picker_ui import add_text
+
+
+HOME = Path.home()
+SCRIPT_DIR = Path(__file__).resolve().parent
+ZSHRC = Path(os.environ.get("ZSHRC", HOME / ".zshrc"))
+OMZ_THEMES = Path(os.environ.get("ZSH_THEME_DIR", HOME / ".oh-my-zsh/themes"))
+FONT_SIZES = ["11", "12", "13", "14", "15", "16", "18"]
+DEFAULT_FONT_SIZE = os.environ.get("NERD_FONT_SIZE", "14")
+
+
+def run(argv, **kwargs):
+    return subprocess.run(argv, check=True, **kwargs)
+
+
+def command_output(argv):
+    return subprocess.check_output(argv, text=True, stderr=subprocess.DEVNULL)
+
+
+def draw_screen(stdscr, title, items, selected, detail):
+    stdscr.erase()
+    height, width = stdscr.getmaxyx()
+    add_text(stdscr, 0, 2, title, width - 4, curses.A_BOLD)
+    add_text(stdscr, 0, max(0, width - 45), "Left back  Right/Enter select  q quit", 43)
+    if height < 10 or width < 64:
+        add_text(stdscr, 2, 2, "Terminal is too small.", width - 4)
+        stdscr.refresh()
+        return
+
+    left_w = max(24, width // 3)
+    for row in range(1, height - 1):
+        add_text(stdscr, row, left_w, "|", 1)
+
+    visible = height - 2
+    start = max(0, selected - visible + 1)
+    for screen_idx, item in enumerate(items[start : start + visible]):
+        idx = start + screen_idx
+        attr = curses.A_REVERSE if idx == selected else curses.A_NORMAL
+        add_text(stdscr, screen_idx + 1, 2, ("> " if idx == selected else "  ") + item, left_w - 4, attr)
+
+    row = 2
+    for line in detail:
+        if row >= height - 1:
+            break
+        add_text(stdscr, row, left_w + 2, line, width - left_w - 4)
+        row += 1
+    stdscr.refresh()
+
+
+def choose(stdscr, title, items, detail_func):
+    selected = 0
+    while True:
+        detail = detail_func(items[selected]) if items else ["No items found."]
+        draw_screen(stdscr, title, items, selected, detail)
+        key = stdscr.getch()
+        if key in (ord("q"), 27):
+            return None
+        if key in (curses.KEY_LEFT, ord("h")):
+            return "__back__"
+        if key in (curses.KEY_UP, ord("k")) and items:
+            selected = (selected - 1) % len(items)
+        elif key in (curses.KEY_DOWN, ord("j")) and items:
+            selected = (selected + 1) % len(items)
+        elif key in (curses.KEY_RIGHT, ord("l"), curses.KEY_ENTER, 10, 13) and items:
+            return items[selected]
+
+
+def leave_curses_run(stdscr, argv):
+    curses.def_prog_mode()
+    curses.endwin()
+    try:
+        subprocess.run(argv, check=False)
+        input("\nPress Enter to return to the picker...")
+    finally:
+        curses.reset_prog_mode()
+        curses.curs_set(0)
+        stdscr.keypad(True)
+
+
+def nerd_font_families():
+    if not shutil_which("fc-list"):
+        return []
+    try:
+        output = command_output(["fc-list", ":", "family"])
+    except subprocess.CalledProcessError:
+        return []
+    families = set()
+    for line in output.splitlines():
+        for family in line.split(","):
+            family = family.strip()
+            if "Nerd Font Mono" in family:
+                families.add(family)
+    return sorted(families)
+
+
+def shutil_which(name):
+    for directory in os.environ.get("PATH", "").split(os.pathsep):
+        path = Path(directory) / name
+        if path.exists() and os.access(path, os.X_OK):
+            return str(path)
+    return None
+
+
+def set_terminal_font(font_spec):
+    if not shutil_which("gsettings"):
+        return "gsettings not found; terminal font was not changed."
+
+    messages = []
+    schemas = command_output(["gsettings", "list-schemas"])
+    if "org.gnome.desktop.interface" in schemas.splitlines():
+        subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", "monospace-font-name", font_spec], check=False)
+        messages.append(f"Set GNOME monospace font to {font_spec}.")
+
+    if "org.gnome.Terminal.ProfilesList" in schemas.splitlines():
+        profile = command_output(["gsettings", "get", "org.gnome.Terminal.ProfilesList", "default"]).strip().strip("'")
+        if profile:
+            path = f"/org/gnome/terminal/legacy/profiles:/:{profile}/"
+            subprocess.run(["gsettings", "set", f"org.gnome.Terminal.Legacy.Profile:{path}", "use-system-font", "false"], check=False)
+            subprocess.run(["gsettings", "set", f"org.gnome.Terminal.Legacy.Profile:{path}", "font", font_spec], check=False)
+            messages.append(f"Set GNOME Terminal font to {font_spec}.")
+    return "\n".join(messages) if messages else "No supported terminal font settings found."
+
+
+def current_terminal_font():
+    if not shutil_which("gsettings"):
+        return ""
+    try:
+        schemas = command_output(["gsettings", "list-schemas"]).splitlines()
+        if "org.gnome.Terminal.ProfilesList" not in schemas:
+            return ""
+        profile = command_output(["gsettings", "get", "org.gnome.Terminal.ProfilesList", "default"]).strip().strip("'")
+        if not profile:
+            return ""
+        path = f"/org/gnome/terminal/legacy/profiles:/:{profile}/"
+        return command_output(["gsettings", "get", f"org.gnome.Terminal.Legacy.Profile:{path}", "font"]).strip().strip("'")
+    except subprocess.CalledProcessError:
+        return ""
+
+
+def choose_font_size(stdscr, font, original_font):
+    selected = 0
+    if DEFAULT_FONT_SIZE in FONT_SIZES:
+        selected = FONT_SIZES.index(DEFAULT_FONT_SIZE)
+    previewed = False
+    message = ""
+    while True:
+        size = FONT_SIZES[selected]
+        spec = f"{font} {size}"
+        draw_screen(
+            stdscr,
+            "Terminal Font Size",
+            FONT_SIZES,
+            selected,
+            [
+                spec,
+                "",
+                "Right/Enter saves.",
+                "p previews by temporarily applying the font.",
+                "Left restores the original font and goes back.",
+                "",
+                "Powerline: \ue0b0 \ue0b2 \ue0b1",
+                "Tokyo: 󰠠 󰤂  󰣀",
+                "Rose Pine:  ",
+                "",
+                message,
+            ],
+        )
+        key = stdscr.getch()
+        message = ""
+        if key in (ord("q"), 27):
+            if previewed and original_font:
+                set_terminal_font(original_font)
+            return None
+        if key in (curses.KEY_LEFT, ord("h")):
+            if previewed and original_font:
+                set_terminal_font(original_font)
+            return "__back__"
+        if key in (curses.KEY_UP, ord("k")):
+            selected = (selected - 1) % len(FONT_SIZES)
+        elif key in (curses.KEY_DOWN, ord("j")):
+            selected = (selected + 1) % len(FONT_SIZES)
+        elif key == ord("p"):
+            message = set_terminal_font(spec)
+            previewed = True
+        elif key in (curses.KEY_RIGHT, ord("l"), curses.KEY_ENTER, 10, 13):
+            return set_terminal_font(spec)
+
+
+def pick_terminal_font(stdscr):
+    fonts = nerd_font_families()
+    if not fonts:
+        fonts = ["JetBrainsMono Nerd Font Mono"]
+    original_font = current_terminal_font()
+    font = choose(
+        stdscr,
+        "Terminal Font Family",
+        fonts,
+        lambda item: [
+            "Choose a terminal font family.",
+            "Right/Enter opens size selection.",
+            "Left returns to the main menu.",
+            "",
+            f"Current: {original_font or 'unknown'}",
+            f"Selected: {item}",
+        ],
+    )
+    if not font or font == "__back__":
+        return "No change."
+    result = choose_font_size(stdscr, font, original_font)
+    if not result or result == "__back__":
+        return "No change."
+    return result
+
+
+def zsh_themes():
+    if not OMZ_THEMES.is_dir():
+        return []
+    return sorted(path.stem.replace(".zsh-theme", "") for path in OMZ_THEMES.glob("*.zsh-theme"))
+
+
+def save_zsh_theme(theme):
+    if not ZSHRC.exists():
+        return f"{ZSHRC} not found."
+    text = ZSHRC.read_text(encoding="utf-8")
+    new_text, count = re.subn(r'^\s*ZSH_THEME=.*$', f'ZSH_THEME="{theme}"', text, count=1, flags=re.MULTILINE)
+    if count == 0:
+        new_text = f'ZSH_THEME="{theme}"\n' + text
+    ZSHRC.write_text(new_text, encoding="utf-8")
+    return f"Saved ZSH_THEME=\"{theme}\" to {ZSHRC}. Open a new shell or run: source {ZSHRC}"
+
+
+def preview_zsh_theme(stdscr, theme):
+    zsh = shutil_which("zsh")
+    if not zsh:
+        return "zsh not found."
+    zsh_root = os.environ.get("ZSH", str(HOME / ".oh-my-zsh"))
+    if not Path(zsh_root).is_dir():
+        return f"{zsh_root} not found."
+
+    curses.def_prog_mode()
+    curses.endwin()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            zdotdir = Path(tmp)
+            (zdotdir / ".zshrc").write_text(
+                f'export ZSH="{zsh_root}"\n'
+                f'ZSH_THEME="{theme}"\n'
+                "plugins=(git)\n"
+                'source "$ZSH/oh-my-zsh.sh"\n'
+                'cd "$OLDPWD"\n'
+                f'print "Previewing zsh theme: {theme}"\n'
+                'print "Exit this shell to return to the picker."\n',
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env["ZDOTDIR"] = str(zdotdir)
+            env["OLDPWD"] = os.getcwd()
+            subprocess.run([zsh, "-i"], env=env, check=False)
+        input("\nPress Enter to return to the picker...")
+    finally:
+        curses.reset_prog_mode()
+        curses.curs_set(0)
+        stdscr.keypad(True)
+    return f"Previewed {theme}."
+
+
+def pick_zsh_theme(stdscr):
+    themes = zsh_themes()
+    selected = 0
+    message = ""
+    while True:
+        if not themes:
+            return "No Oh My Zsh themes found."
+        theme = themes[selected]
+        draw_screen(
+            stdscr,
+            "Zsh Theme",
+            themes,
+            selected,
+            [
+                "Oh My Zsh theme.",
+                f"Theme: {theme}",
+                "",
+                "p previews in a temporary zsh shell.",
+                "Right/Enter saves to .zshrc.",
+                "Left returns to the main menu.",
+                "",
+                message,
+            ],
+        )
+        key = stdscr.getch()
+        message = ""
+        if key in (ord("q"), 27, curses.KEY_LEFT, ord("h")):
+            return "No change."
+        if key in (curses.KEY_UP, ord("k")):
+            selected = (selected - 1) % len(themes)
+        elif key in (curses.KEY_DOWN, ord("j")):
+            selected = (selected + 1) % len(themes)
+        elif key == ord("p"):
+            message = preview_zsh_theme(stdscr, theme)
+        elif key in (curses.KEY_RIGHT, ord("l"), curses.KEY_ENTER, 10, 13):
+            return save_zsh_theme(theme)
+
+
+def main(stdscr):
+    curses.curs_set(0)
+    curses.noecho()
+    curses.cbreak()
+    stdscr.keypad(True)
+    message = ""
+    actions = ["Terminal font", "Zsh theme", "Vim theme", "Tmux theme", "Quit"]
+
+    while True:
+        def detail(item):
+            lines = {
+                "Terminal font": ["Choose Nerd Font family and size for GNOME Terminal when available."],
+                "Zsh theme": ["Choose an Oh My Zsh theme and save it to .zshrc."],
+                "Vim theme": ["Open the Vim theme picker."],
+                "Tmux theme": ["Open the tmux theme picker."],
+                "Quit": ["Exit."],
+            }[item]
+            if message:
+                lines += ["", message]
+            return lines
+
+        action = choose(stdscr, "Config Picker", actions, detail)
+        if action in (None, "Quit"):
+            return
+        if action == "__back__":
+            message = ""
+            continue
+        if action == "Terminal font":
+            message = pick_terminal_font(stdscr)
+        elif action == "Zsh theme":
+            message = pick_zsh_theme(stdscr)
+        elif action == "Vim theme":
+            leave_curses_run(stdscr, [str(SCRIPT_DIR / "select-vim-theme")])
+            message = "Returned from Vim theme picker."
+        elif action == "Tmux theme":
+            leave_curses_run(stdscr, [str(SCRIPT_DIR / "select-tmux-theme")])
+            message = "Returned from tmux theme picker."
+
+
+if __name__ == "__main__":
+    curses.wrapper(main)

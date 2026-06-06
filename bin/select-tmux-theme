@@ -1,0 +1,496 @@
+#!/usr/bin/env python3
+import argparse
+import curses
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+from picker_ui import add_text, draw_panel_border
+
+
+HOME = Path.home()
+THEME_FILE = Path(os.environ.get("TMUX_THEME_FILE", HOME / ".tmux/theme.conf"))
+THEME_DIR = Path(os.environ.get("TMUX_THEME_DIR", HOME / ".tmux/themes"))
+POWERLINE_THEME = Path(os.environ.get("TMUX_POWERLINE_THEME", HOME / ".tmux/themes/powerline.conf"))
+PREVIEW = os.environ.get("TMUX_THEME_PREVIEW", "true") != "false"
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_THEME_DIR = Path(os.environ.get("TMUX_THEME_SOURCE_DIR", SCRIPT_DIR.parent / "themes/tmux"))
+TMUX_CONF = Path(os.environ.get("TMUX_CONF", HOME / ".tmux.conf"))
+OFFLINE_MODE = os.environ.get("OFFLINE_MODE", "false") == "true"
+
+
+@dataclass(frozen=True)
+class Theme:
+    key: str
+    family: str
+    name: str
+    kind: str
+    repo: str = ""
+    entrypoint: str = ""
+    variant: str = ""
+    description: str = ""
+
+
+THEMES = [
+    Theme("yossi-plain", "Yossi's theme", "Plain", "local", variant="plain", description="Molokai colors with the simple centered status layout."),
+    Theme("yossi-powerline", "Yossi's theme", "Powerline", "local", variant="powerline", description="Molokai colors with your centered powerline status layout."),
+    Theme("catppuccin-latte", "Catppuccin", "Latte", "upstream", "catppuccin/tmux", "catppuccin.tmux", "latte", "Official Catppuccin light flavor through TPM."),
+    Theme("catppuccin-frappe", "Catppuccin", "Frappe", "upstream", "catppuccin/tmux", "catppuccin.tmux", "frappe", "Official Catppuccin dark flavor through TPM."),
+    Theme("catppuccin-macchiato", "Catppuccin", "Macchiato", "upstream", "catppuccin/tmux", "catppuccin.tmux", "macchiato", "Official Catppuccin dark flavor through TPM."),
+    Theme("catppuccin-mocha", "Catppuccin", "Mocha", "upstream", "catppuccin/tmux", "catppuccin.tmux", "mocha", "Official Catppuccin dark flavor through TPM."),
+    Theme("tokyonight-night", "Tokyo Night", "Night", "upstream", "janoamaral/tokyo-night-tmux", "tokyo-night.tmux", "night", "Tokyo Night with path, host, git, and datetime widgets enabled."),
+    Theme("tokyonight-storm", "Tokyo Night", "Storm", "upstream", "janoamaral/tokyo-night-tmux", "tokyo-night.tmux", "storm", "Tokyo Night storm variant with the same widget preset."),
+    Theme("tokyonight-moon", "Tokyo Night", "Moon", "upstream", "janoamaral/tokyo-night-tmux", "tokyo-night.tmux", "moon", "Tokyo Night moon variant with the same widget preset."),
+    Theme("tokyonight-day", "Tokyo Night", "Day", "upstream", "janoamaral/tokyo-night-tmux", "tokyo-night.tmux", "day", "Tokyo Night light variant with the same widget preset."),
+    Theme("dracula", "Dracula", "Default", "upstream", "dracula/tmux", "dracula.tmux", description="Official Dracula tmux plugin through TPM."),
+    Theme("gruvbox-dark", "Gruvbox", "Dark", "upstream", "egel/tmux-gruvbox", "gruvbox-tpm.tmux", "dark256", "Gruvbox dark 256-color variant."),
+    Theme("gruvbox-light", "Gruvbox", "Light", "upstream", "egel/tmux-gruvbox", "gruvbox-tpm.tmux", "light256", "Gruvbox light 256-color variant."),
+    Theme("nord", "Nord", "Default", "upstream", "nordtheme/tmux", "nord.tmux", description="Official Nord tmux plugin through TPM."),
+    Theme("onedark", "OneDark", "Default", "upstream", "odedlaz/tmux-onedark-theme", "tmux-onedark-theme.tmux", description="OneDark tmux plugin through TPM."),
+    Theme("rose-pine", "Rose Pine", "Default", "upstream", "rose-pine/tmux", "rose-pine.tmux", description="Official Rose Pine tmux plugin through TPM."),
+    Theme("solarized-dark", "Solarized", "Dark", "upstream", "seebi/tmux-colors-solarized", "tmuxcolors.tmux", "dark", "Solarized dark through TPM."),
+    Theme("solarized-light", "Solarized", "Light", "upstream", "seebi/tmux-colors-solarized", "tmuxcolors.tmux", "light", "Solarized light through TPM."),
+]
+
+FAMILIES = []
+for theme in THEMES:
+    if theme.family not in FAMILIES:
+        FAMILIES.append(theme.family)
+
+
+def die(message):
+    print(message, file=sys.stderr)
+    raise SystemExit(1)
+
+
+def run(argv, **kwargs):
+    return subprocess.run(argv, check=True, **kwargs)
+
+
+def tmux_plugin_name(theme):
+    name = Path(theme.repo).name
+    if name.endswith(".git"):
+        return name[:-4]
+    return name
+
+
+def local_theme_path():
+    for base in (THEME_DIR, REPO_THEME_DIR):
+        path = base / "molokai.conf"
+        if path.exists():
+            return path
+    die("Yossi's theme needs molokai.conf in ~/.tmux/themes or themes/tmux")
+
+
+def style_attr(path, option, attr, fallback):
+    prefix = f"set -g {option} "
+    with open(path, encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip().replace("'", "")
+            if not line.startswith(prefix):
+                continue
+            for part in line[len(prefix):].split(","):
+                key, _, value = part.strip().partition("=")
+                if key == attr and value:
+                    return value
+    return fallback
+
+
+def write_my_powerline(theme_path, output):
+    status_bg = style_attr(theme_path, "status-style", "bg", "colour235")
+    status_fg = style_attr(theme_path, "status-style", "fg", "colour252")
+    left_fg = style_attr(theme_path, "status-left-style", "fg", "green")
+    right_fg = style_attr(theme_path, "status-right-style", "fg", "cyan")
+    current_fg = style_attr(theme_path, "window-status-current-style", "fg", "colour208")
+    muted_fg = style_attr(theme_path, "window-status-style", "fg", "colour244")
+    output.write_text(f"""set -g status-left-length 48
+set -g status-right-length 56
+set -g status-justify centre
+set -g window-status-separator ""
+
+set -g status-left "#[fg={status_bg},bg={left_fg},bold] #S #[fg={left_fg},bg={status_bg},nobold]#[fg=white,bg={status_bg}] #I #[fg={right_fg}]#P "
+set -g status-right "#[fg={right_fg},bg={status_bg}]#[fg={status_bg},bg={right_fg}] #H #[fg={current_fg},bg={right_fg}]#[fg={status_bg},bg={current_fg}] %H:%M:%S #[fg={left_fg},bg={current_fg}]#[fg={status_bg},bg={left_fg}] %d-%b-%y "
+
+set -g window-status-format "#[fg={muted_fg},bg=default] #I:#W#F "
+set -g window-status-current-format "#[fg={status_bg},bg={current_fg}]#[fg={status_bg},bg={current_fg},bold] #I:#W#F #[fg={current_fg},bg=default,nobold]"
+""", encoding="utf-8")
+
+
+def plain_status():
+    return """set -g status-left-length 40
+set -g status-right-length 40
+set -g status-justify centre
+set -g window-status-separator ""
+set -g status-left "#S #[fg=white]» #[fg=yellow]#I #[fg=cyan]#P"
+set -g status-right "#H #[fg=white]« #[fg=yellow]%H:%M:%S #[fg=green]%d-%b-%y"
+set -g window-status-format " #I:#W#F "
+set -g window-status-current-format " #I:#W#F "
+"""
+
+
+def upstream_reset():
+    return """set -g status-left-length 10
+set -g status-right-length 40
+set -g status-justify left
+set -g window-status-separator ""
+set -g status-left "[#S] "
+set -g status-right "\\"#{=21:pane_title}\\" %H:%M %d-%b-%y"
+set -g window-status-format "#I:#W#{?window_flags,#{window_flags}, }"
+set -g window-status-current-format "#I:#W#{?window_flags,#{window_flags}, }"
+set -g status-style default
+set -g status-left-style default
+set -g status-right-style default
+set -g window-status-style default
+set -g window-status-current-style default
+set -g pane-border-style default
+set -g pane-active-border-style default
+set -g message-style default
+set -g message-command-style default
+set -g mode-style default
+"""
+
+
+def upstream_config(theme):
+    lines = [upstream_reset(), f"set -g @plugin '{theme.repo}'\n"]
+    if theme.family == "Catppuccin":
+        lines.append(f"""set -g @catppuccin_flavor '{theme.variant}'
+set -g @catppuccin_window_status_style 'rounded'
+set -g status-left ""
+set -g status-right-length 100
+set -g status-left-length 100
+set -g status-right "#{{E:@catppuccin_status_application}}"
+set -agF status-right "#{{E:@catppuccin_status_cpu}}"
+set -agF status-right "#{{E:@catppuccin_status_ram}}"
+set -ag status-right "#{{E:@catppuccin_status_session}}"
+set -ag status-right "#{{E:@catppuccin_status_uptime}}"
+""")
+    elif theme.family == "Tokyo Night":
+        lines.append(f"""set -g @tokyo-night-tmux_theme {theme.variant}
+set -g @tokyo-night-tmux_transparent 0
+set -g @tokyo-night-tmux_window_id_style none
+set -g @tokyo-night-tmux_show_datetime 1
+set -g @tokyo-night-tmux_date_format YMD
+set -g @tokyo-night-tmux_time_format 24H
+set -g @tokyo-night-tmux_show_path 1
+set -g @tokyo-night-tmux_path_format relative
+set -g @tokyo-night-tmux_show_hostname 1
+set -g @tokyo-night-tmux_show_git 1
+set -g @tokyo-night-tmux_show_wbg 0
+set -g @tokyo-night-tmux_show_netspeed 0
+set -g @tokyo-night-tmux_show_battery_widget 1
+set -g @tokyo-night-tmux_show_music 0
+""")
+    elif theme.family == "Gruvbox":
+        lines.append(f"set -g @tmux-gruvbox '{theme.variant}'\n")
+    elif theme.family == "Solarized":
+        lines.append(f"set -g @colors-solarized '{theme.variant}'\n")
+    return "".join(lines)
+
+
+def save_theme(theme):
+    THEME_FILE.parent.mkdir(parents=True, exist_ok=True)
+    THEME_DIR.mkdir(parents=True, exist_ok=True)
+    if theme.kind == "local":
+        source = local_theme_path()
+        target = THEME_DIR / "molokai.conf"
+        if not target.exists() or not source.samefile(target):
+            shutil.copy2(source, target)
+        if theme.variant == "powerline":
+            write_my_powerline(source, POWERLINE_THEME)
+            THEME_FILE.write_text(f'source-file "{target}"\nsource-file "{POWERLINE_THEME}"\n', encoding="utf-8")
+        else:
+            THEME_FILE.write_text(f'source-file "{target}"\n{plain_status()}', encoding="utf-8")
+    else:
+        THEME_FILE.write_text(upstream_config(theme), encoding="utf-8")
+    apply_theme(theme)
+
+
+def apply_theme(theme):
+    if "TMUX" not in os.environ:
+        return
+    if not TMUX_CONF.exists():
+        return
+    subprocess.run(["tmux", "source-file", "-q", str(TMUX_CONF)], check=False)
+    installer = HOME / ".tmux/plugins/tpm/bin/install_plugins"
+    if theme.kind == "upstream" and installer.exists():
+        shutil.rmtree(HOME / ".tmux/plugins" / tmux_plugin_name(theme), ignore_errors=True)
+        subprocess.run([str(installer)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        subprocess.run(["tmux", "source-file", "-q", str(TMUX_CONF)], check=False)
+
+
+def clone_theme(theme, dest):
+    repo = f"https://github.com/{theme.repo}.git"
+    installed = HOME / ".tmux/plugins" / tmux_plugin_name(theme)
+    if (installed / ".git").is_dir():
+        run(["git", "clone", "--depth", "1", str(installed), str(dest)], stdout=subprocess.DEVNULL)
+        return
+    if OFFLINE_MODE:
+        die(f"Missing offline tmux theme checkout: {installed}")
+    run(["git", "clone", "--depth", "1", repo, str(dest)], stdout=subprocess.DEVNULL)
+
+
+def zsh_command(message, rcdir):
+    zsh = shutil.which("zsh")
+    launcher = rcdir / "preview-shell"
+    if not zsh:
+        shell = os.environ.get("SHELL", "/bin/sh")
+        launcher.write_text(
+            "#!/usr/bin/env bash\n"
+            "cd /\n"
+            f"printf %s\\\\n {sh_quote(message)}\n"
+            f"exec -a sh {sh_quote(shell)}\n",
+            encoding="utf-8",
+        )
+        launcher.chmod(0o755)
+        return str(launcher)
+    (rcdir / ".zshrc").write_text(
+        'if [ -r "$HOME/.zshrc" ]; then source "$HOME/.zshrc"; fi\n'
+        'precmd_functions=(tmux_theme_preview_once ${precmd_functions[@]})\n'
+        'tmux_theme_preview_once() {\n'
+        '  precmd_functions=("${precmd_functions[@]:#tmux_theme_preview_once}")\n'
+        f'  printf %s\\\\n {sh_quote(message)}\n'
+        '}\n',
+        encoding="utf-8",
+    )
+    launcher.write_text(
+        "#!/usr/bin/env bash\n"
+        "cd /\n"
+        f"export ZDOTDIR={sh_quote(str(rcdir))}\n"
+        f"exec -a zsh {sh_quote(zsh)} -l\n",
+        encoding="utf-8",
+    )
+    launcher.chmod(0o755)
+    return str(launcher)
+
+
+def sh_quote(value):
+    return "'" + str(value).replace("'", "'\"'\"'") + "'"
+
+
+def preview_theme(theme):
+    if not shutil.which("tmux"):
+        die("tmux is required for previews")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        conf = tmp / "tmux.conf"
+        theme_conf = tmp / "theme.conf"
+        wrapper = tmp / "bin"
+        wrapper.mkdir()
+        socket = f"theme-preview-{os.getpid()}"
+        tmux_bin = shutil.which("tmux")
+        (wrapper / "tmux").write_text(f'#!/usr/bin/env bash\nexec "{tmux_bin}" -L "{socket}" "$@"\n', encoding="utf-8")
+        (wrapper / "tmux").chmod(0o755)
+
+        if theme.kind == "local":
+            source = local_theme_path()
+            if theme.variant == "powerline":
+                powerline = tmp / "powerline.conf"
+                write_my_powerline(source, powerline)
+                theme_conf.write_text(f'source-file "{source}"\nsource-file "{powerline}"\n', encoding="utf-8")
+            else:
+                theme_conf.write_text(f'source-file "{source}"\n{plain_status()}', encoding="utf-8")
+        else:
+            plugin_dir = tmp / "plugin"
+            clone_theme(theme, plugin_dir)
+            theme_conf.write_text(
+                upstream_config(theme) + f'run-shell "PATH={wrapper}:$PATH {plugin_dir / theme.entrypoint}"\n',
+                encoding="utf-8",
+            )
+
+        conf.write_text(f'source-file -q "{TMUX_CONF}"\nsource-file "{theme_conf}"\n', encoding="utf-8")
+        left_rc = tmp / "left"
+        right_rc = tmp / "right"
+        left_rc.mkdir()
+        right_rc.mkdir()
+        left = zsh_command(f"Theme: {theme.family} / {theme.name}\n\nDetach or exit to return to the picker.", left_rc)
+        right = zsh_command("Status and pane preview\n\ncurrent pane border\nmessage style\nmode style", right_rc)
+        env = os.environ.copy()
+        env.pop("TMUX", None)
+        env["TMUX_THEME_PREVIEW"] = "1"
+        left_pane = subprocess.check_output(
+            ["tmux", "-L", socket, "-f", str(conf), "new-session", "-d", "-P", "-F", "#{pane_id}", "-c", "/", "-s", "preview", "-n", "shell", left],
+            env=env,
+            text=True,
+            stderr=subprocess.STDOUT,
+        ).strip()
+        run(["tmux", "-L", socket, "rename-window", "-t", "preview:", "shell"], env=env)
+        run(["tmux", "-L", socket, "select-pane", "-t", left_pane, "-T", "shell"], env=env)
+        right_pane = subprocess.check_output(
+            ["tmux", "-L", socket, "split-window", "-h", "-P", "-F", "#{pane_id}", "-c", "/", "-t", left_pane, right],
+            env=env,
+            text=True,
+            stderr=subprocess.STDOUT,
+        ).strip()
+        run(["tmux", "-L", socket, "select-pane", "-t", right_pane, "-T", "shell"], env=env)
+        run(["tmux", "-L", socket, "select-layout", "even-horizontal"], env=env)
+        subprocess.run(["tmux", "-L", socket, "attach-session", "-t", "preview"], env=env, check=False)
+        subprocess.run(["tmux", "-L", socket, "kill-server"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+
+def themes_for_family(family):
+    return [theme for theme in THEMES if theme.family == family]
+
+
+def draw_list(stdscr, top, left, height, width, title, items, selected, active):
+    draw_panel_border(stdscr, top, left, height, width, title, active)
+    visible = max(0, height - 2)
+    start = 0
+    if selected >= visible:
+        start = selected - visible + 1
+    for screen_idx, item in enumerate(items[start : start + visible]):
+        idx = start + screen_idx
+        attr = curses.A_REVERSE if idx == selected else curses.A_NORMAL
+        marker = "> " if idx == selected else "  "
+        add_text(stdscr, top + 1 + screen_idx, left + 1, marker + item, max(0, width - 2), attr)
+
+
+def detail_lines(theme, message):
+    lines = [
+        f"{theme.family}",
+        f"Variant: {theme.name}",
+        "",
+        theme.description,
+        "",
+        "Enter  save",
+        "p      preview",
+        "q      quit",
+        "",
+    ]
+    if theme.kind == "upstream":
+        lines.extend([
+            f"TPM: {theme.repo}",
+            "The terminal pane background is controlled by your terminal emulator.",
+            "Tmux themes set status, border, message, and popup colors.",
+        ])
+    if message:
+        lines.extend(["", message])
+    return lines
+
+
+def draw_details(stdscr, top, left, height, width, theme, message):
+    draw_panel_border(stdscr, top, left, height, width, "Details", False)
+    row = top + 1
+    inner_width = max(1, width - 4)
+    for line in detail_lines(theme, message):
+        chunks = [line[i : i + inner_width] for i in range(0, max(1, len(line)), inner_width)] or [""]
+        for chunk in chunks:
+            if row >= top + height - 1:
+                return
+            add_text(stdscr, row, left + 2, chunk, inner_width)
+            row += 1
+
+
+def curses_main(stdscr):
+    curses.curs_set(0)
+    curses.noecho()
+    curses.cbreak()
+    curses.use_default_colors()
+    stdscr.keypad(True)
+    family_idx = 0
+    variant_idx = 0
+    column = 0
+    message = ""
+    while True:
+        stdscr.erase()
+        height, width = stdscr.getmaxyx()
+        if height < 12 or width < 70:
+            stdscr.addstr(0, 0, "Terminal is too small for the theme picker.")
+            stdscr.refresh()
+            if stdscr.getch() in (ord("q"), 27):
+                return
+            continue
+        left_w = max(20, width // 4)
+        mid_w = max(22, width // 4)
+        right_w = width - left_w - mid_w
+        families = FAMILIES
+        variants = themes_for_family(families[family_idx])
+        variant_idx = min(variant_idx, len(variants) - 1)
+        theme = variants[variant_idx]
+
+        header = "Tmux Themes"
+        stdscr.addnstr(0, 2, header, width - 4, curses.A_BOLD)
+        add_text(stdscr, 0, width - 34, "q quit  p preview  Enter save", 32)
+        draw_list(stdscr, 1, 0, height - 2, left_w, "Family", families, family_idx, column == 0)
+        draw_list(stdscr, 1, left_w, height - 2, mid_w, "Variant", [t.name for t in variants], variant_idx, column == 1)
+        draw_details(stdscr, 1, left_w + mid_w, height - 2, right_w, theme, message)
+        stdscr.noutrefresh()
+        curses.doupdate()
+
+        key = stdscr.getch()
+        message = ""
+        if key in (ord("q"), 27):
+            return
+        if key in (curses.KEY_LEFT, ord("h")):
+            column = max(0, column - 1)
+        elif key in (curses.KEY_RIGHT, ord("l"), ord("\t")):
+            column = min(1, column + 1)
+        elif key in (curses.KEY_UP, ord("k")):
+            if column == 0:
+                family_idx = (family_idx - 1) % len(families)
+                variant_idx = 0
+            else:
+                variant_idx = (variant_idx - 1) % len(variants)
+        elif key in (curses.KEY_DOWN, ord("j")):
+            if column == 0:
+                family_idx = (family_idx + 1) % len(families)
+                variant_idx = 0
+            else:
+                variant_idx = (variant_idx + 1) % len(variants)
+        elif key == ord("p"):
+            curses.def_prog_mode()
+            curses.endwin()
+            try:
+                preview_theme(theme)
+            except Exception as exc:
+                message = f"Preview failed: {exc}"
+            finally:
+                curses.reset_prog_mode()
+                curses.curs_set(0)
+        elif key in (curses.KEY_ENTER, 10, 13):
+            try:
+                save_theme(theme)
+                message = f"Saved {THEME_FILE}"
+            except Exception as exc:
+                message = f"Save failed: {exc}"
+
+
+def theme_by_key(key):
+    for theme in THEMES:
+        if theme.key == key:
+            return theme
+    die(f"Unknown theme: {key}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Ranger-style tmux theme picker")
+    parser.add_argument("--save", metavar="THEME", help="save a theme key without opening the curses UI")
+    parser.add_argument("--list", action="store_true", help="list theme keys")
+    parser.add_argument("--repos", action="store_true", help="list upstream GitHub repos used by selectable themes")
+    args = parser.parse_args()
+    if args.repos:
+        seen = set()
+        for theme in THEMES:
+            if theme.kind != "upstream" or theme.repo in seen:
+                continue
+            seen.add(theme.repo)
+            print(theme.repo)
+        return
+    if args.list:
+        for theme in THEMES:
+            print(f"{theme.key}\t{theme.family}\t{theme.name}")
+        return
+    if args.save:
+        save_theme(theme_by_key(args.save))
+        print(f"Saved {THEME_FILE}")
+        if "TMUX" not in os.environ:
+            print(f"Reload tmux config or run: tmux source-file {TMUX_CONF}")
+        return
+    curses.wrapper(curses_main)
+
+
+if __name__ == "__main__":
+    main()

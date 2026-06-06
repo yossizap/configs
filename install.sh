@@ -411,6 +411,18 @@ install_tmux_plugins_from_config() {
     done < <(grep "^set -g @plugin '" "$REPO_DIR/.tmux.conf")
 }
 
+install_tmux_theme_plugins() {
+    local repo
+    local name
+
+    while IFS= read -r repo; do
+        [ -n "$repo" ] || continue
+        name="${repo##*/}"
+        name="${name%.git}"
+        clone_or_update "https://github.com/$repo.git" "$HOME/.tmux/plugins/$name" master
+    done < <("$REPO_DIR/bin/select-tmux-theme" --repos)
+}
+
 install_nerd_font() {
     local tmp_zip
 
@@ -732,14 +744,22 @@ echo "Copying configuration files..."
 rsync -ah "$REPO_DIR/.vimrc" "$REPO_DIR/.zshrc" "$HOME/"
 rsync -ah "$REPO_DIR/.tmux.conf" "$TMUX_CONFIG_ROOT/"
 mkdir -p "$HOME/.local/bin"
+rsync -ah "$REPO_DIR/bin/select-config" "$HOME/.local/bin/"
+rsync -ah "$REPO_DIR/bin/picker_ui.py" "$HOME/.local/bin/"
 mkdir -p "$HOME/.tmux/bin" "$HOME/.tmux/themes"
+rsync -ah "$REPO_DIR/bin/select-tmux-theme" "$HOME/.tmux/bin/"
+rsync -ah "$REPO_DIR/bin/picker_ui.py" "$HOME/.tmux/bin/"
+rsync -ah "$REPO_DIR/themes/tmux/"*.conf "$HOME/.tmux/themes/"
 clone_or_update https://github.com/tmux-plugins/tpm.git "$HOME/.tmux/plugins/tpm" master
 install_tmux_plugins_from_config
+install_tmux_theme_plugins
 
 mkdir -p "$VIM_CONFIG_DIR/colors" "$VIM_CONFIG_DIR/bin" "$NVIM_CONFIG_DIR/colors"
 rsync -ah "$REPO_DIR/themes/"*.vim "$VIM_CONFIG_DIR/colors/"
 rsync -ah "$REPO_DIR/.vimrc" "$NVIM_CONFIG_DIR/init.vim"
 rsync -ah "$REPO_DIR/themes/"*.vim "$NVIM_CONFIG_DIR/colors/"
+rsync -ah "$REPO_DIR/bin/select-vim-theme" "$VIM_CONFIG_DIR/bin/"
+rsync -ah "$REPO_DIR/bin/picker_ui.py" "$VIM_CONFIG_DIR/bin/"
 
 echo "Installing vim-plug..."
 mkdir -p "$VIM_CONFIG_DIR/autoload"
