@@ -1,5 +1,5 @@
 # Path to your oh-my-zsh installation.
-export ZSH=/home/$USER/.oh-my-zsh
+export ZSH="$HOME/.oh-my-zsh"
 
 # Set name of the theme to load.
 # Look in ~/.oh-my-zsh/themes/
@@ -53,11 +53,27 @@ plugins=(git mercurial colored-man-pages colorize command-not-found fzf)
 # export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 # export MANPATH="/usr/local/man:$MANPATH"
 
-source $ZSH/oh-my-zsh.sh
+HISTFILE="${ZDOTDIR:-$HOME}/.zsh_history"
+HISTSIZE=50000
+SAVEHIST=50000
+setopt append_history
+setopt extended_history
+setopt hist_expire_dups_first
+setopt hist_ignore_all_dups
+setopt hist_ignore_space
+setopt hist_reduce_blanks
+setopt inc_append_history
+setopt share_history
 
-export PATH="$PATH:/home/$USER/.cargo/bin"
+export FZF_DEFAULT_COMMAND='rg --files --hidden --glob "!.git/*" --glob "!sources/*" --glob "!vim/*" --glob "!tmux/*" --glob "!node_modules/*" --glob "!build/*" --glob "!dist/*"'
+export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border'
 
-export EDITOR="vim"
+if [ -f "$ZSH/oh-my-zsh.sh" ]; then
+    source "$ZSH/oh-my-zsh.sh"
+fi
+
+export PATH="$PATH:$HOME/.cargo/bin"
 
 # You may need to manually set your language environment
 # export LANG=en_US.UTF-8
@@ -86,3 +102,9 @@ export DIFF_TOOL='vimdiff'
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
+#
+alias vi="vim"
+
+if [ -r "$HOME/.zshrc.local" ]; then
+    source "$HOME/.zshrc.local"
+fi
