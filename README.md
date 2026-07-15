@@ -16,13 +16,13 @@
 # Introduction
 
 ---
-This repository provides configurations for Vim and tmux to create a productive, distraction-free environment. 
-The setups maintain default behaviors while adding quality-of-life enhancements. 
-You can easily install everything using the `install.sh` script, which configures `.bashrc`, `.zshrc`, `fzf`, and `.vimrc` with all necessary dependencies.
+This repository contains Vim, tmux, zsh, and fzf configuration. Run `install.sh` to install the configuration and its dependencies.
+
+Run `select-config` to select terminal fonts and zsh, Vim, or tmux themes. Use Left to go back, Right or Enter to select, and `p` to preview.
+
+Optional machine-specific settings can be added to `~/.zshrc.local` and `~/.vimrc.local`. They are loaded after the repository configuration and are not overwritten by the installer.
 
 # Vim Configuration
-
-Custom key mappings are minimal and intuitive, focused on improving productivity without disrupting familiar Vim workflows.
 
 This configuration uses [vim-plug](https://github.com/junegunn/vim-plug) as the plugin manager. To install plugins, use:
 
@@ -42,9 +42,9 @@ This configuration uses [vim-plug](https://github.com/junegunn/vim-plug) as the 
 - `\cs` and `\c<space>` – Comments and uncomments selected code (requires NERD Commenter plugin)
 
 ### Pane and Window Management
-- `<F4>` – Toggle NERDTree sidebar file explorer
 - `<F3>` – Toggle Tagbar (provides a file structure view)
-- `<A-h>`, `<A-j>`, `<A-k>`, `<A-l>` – Switch between splits (works with Tmux if vim-tmux-navigator is installed)
+- `<A-h>`, `<A-j>`, `<A-k>`, `<A-l>` – Switch between Vim splits and tmux panes
+- `<A-Left>`, `<A-Down>`, `<A-Up>`, `<A-Right>` – Arrow-key equivalents for Vim/tmux pane navigation
 
 ### Terminal Management
 - `<C-t>` – Toggle floating terminal window (requires vim-floaterm plugin)
@@ -53,7 +53,7 @@ This configuration uses [vim-plug](https://github.com/junegunn/vim-plug) as the 
 
 ### EasyMotion
 - `<Leader>h`, `<Leader>j`, `<Leader>k`, `<Leader>l` – EasyMotion mappings for linewise navigation
-- `<F>` – EasyMotion prefix key for jump navigation
+- `<Leader><Leader>` – EasyMotion prefix key for jump navigation
 
 ### UltiSnips
 - `<C-j> / <C-k>` – Navigate forward/backward within a snippet
@@ -108,7 +108,12 @@ This configuration uses [vim-plug](https://github.com/junegunn/vim-plug) as the 
 ## Theme
 
 - `set background=dark`
-- `colorscheme molokai`
+- Default fallback: `colorscheme molokai`
+- Run `~/.vim/bin/select-vim-theme` after install to preview and save a theme.
+- The selected theme is written to `~/.vim/theme.vim`.
+- Bundled theme: `molokai`.
+- Popular colorschemes are managed through vim-plug; run `:PlugInstall` if they are not listed.
+- The picker uses a curses UI. Use `/` to search, `p` to preview, `Right` or `Enter` to save, and `i` to run `PlugInstall --sync` when curated themes are missing.
 
 # Tmux Configuration
 
@@ -120,6 +125,22 @@ This configuration uses [vim-plug](https://github.com/junegunn/vim-plug) as the 
 - `setw -g mouse on` - Allows mouse interactions for pane selection and resizing
 - `setw -g monitor-activity on` and `set -g visual-activity on` - Provides visual cues for activity within panes
 
+## Tmux Theme
+
+- Run `~/.tmux/bin/select-tmux-theme` after install to open the ranger-style theme picker.
+- The selected theme is written to `~/.tmux/theme.conf`.
+- Previews use an isolated tmux socket and do not modify existing tmux sessions.
+- The picker uses columns for theme family, variant, and details. Use arrows or `h/j/k/l`, `p` to preview, `Enter` to save, and `q` to quit.
+- Yossi's theme is the bundled Molokai-based theme with `Plain` and `Powerline` variants.
+- Upstream TPM theme families: `Catppuccin`, `Tokyo Night`, `Dracula`, `Gruvbox`, `Nord`, `OneDark`, `Rose Pine`, and `Solarized`.
+- Catppuccin variants: `Latte`, `Frappe`, `Macchiato`, `Mocha`.
+- Tokyo Night variants: `Night`, `Storm`, `Moon`, `Day`.
+- Yossi's Powerline variant keeps the centered status layout. Upstream themes use their plugin defaults.
+- Powerline and upstream icon widgets require the terminal emulator profile to use a Nerd Font, such as `JetBrainsMono Nerd Font Mono`.
+- Truecolor is enabled for new tmux clients. Open a new terminal tab/window or detach and reattach tmux after changing terminal/font settings.
+- Tmux themes only control tmux UI colors. The main terminal pane background still comes from the terminal emulator profile unless the theme uses transparent/default backgrounds.
+- `install.sh` installs `JetBrainsMono Nerd Font Mono` by default and configures GNOME Terminal when `gsettings` is available. Set `INSTALL_NERD_FONT=false` or `CONFIGURE_TERMINAL_FONT=false` to skip those steps.
+
 ## Tmux Shortcuts and Plugin Usage
 
 ### Prefix Key
@@ -128,7 +149,9 @@ This configuration uses [vim-plug](https://github.com/junegunn/vim-plug) as the 
 ### Key Bindings
 - **Navigation**:
   - `M-Left`, `M-Down`, `M-Up`, `M-Right`: Navigate between panes using Alt + arrow keys. If in Vim, sends the corresponding Vim navigation command.
-  - `C-h`, `C-j`, `C-k`, `C-l`: Navigate between panes using Ctrl + arrow keys. Sends Vim commands if applicable.
+  - `M-h`, `M-j`, `M-k`, `M-l`: Navigate between panes using Alt + Vim direction keys. If in Vim, sends the corresponding Vim navigation command.
+  - `Prefix + h/j/k/l` and `Prefix + arrows`: Navigate between panes after the tmux prefix.
+  - `Shift + Left` / `Shift + Right`: Switch to the previous or next tmux window.
 
 - **Window and Pane Management**:
   - `c`: Create a new window in the current directory.
