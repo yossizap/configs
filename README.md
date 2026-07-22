@@ -4,6 +4,7 @@
 - [Vim Configuration](#vim-configuration)
   - [Custom Shortcuts](#custom-shortcuts)
   - [Plugin-Specific Shortcuts](#plugin-specific-shortcuts)
+  - [Project Completion](#project-completion)
   - [Important Vim Options](#important-vim-options)
   - [Useful Commands](#useful-commands)
   - [Theme](#theme)
@@ -74,6 +75,19 @@ This configuration uses [vim-plug](https://github.com/junegunn/vim-plug) as the 
 
 ### Autoformatting
 - `<Leader>f` – Autoformat code in visual mode (requires vim-autoformat plugin)
+- `:ClangFormatFix` – Format the current C or C++ buffer with clang-format
+- `:ClangTidyFix` – Apply clang-tidy fixes using the project compilation database
+
+## Project Completion
+
+Projects opt in by placing `.vim-project.json` at their root. Run `configure-vim-project` there to generate a profile. Python completion, signatures, and diagnostics use Zuban through vim-lsp. C and C++ use clangd through ALE when a compilation database is configured, and Gutentags provides tag completion.
+
+- `Tab` / `Shift+Tab` – Complete forward/backward; snippets take priority
+- `:ProjectInfo` – Show the active project profile
+- `:ProjectCompletionToggle` – Toggle completion for the current buffer
+- `:GutentagsToggleEnabled` – Toggle tag generation
+- `K` – Show documentation for the symbol under the cursor
+- `gd` / `gr` – Go to a definition or list references
 
 ## Important Vim Options
 

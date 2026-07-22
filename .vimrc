@@ -1,6 +1,5 @@
 "------------------------------------------------------------
 " Plugins - Run :PlugUpdate once in a while, :PlugInstall for new plugins
-filetype off
 if !empty(glob('~/.vim/autoload/plug.vim'))
 call plug#begin('~/.vim/plugged')
 " Use explicit Alt-* mappings instead of vim-tmux-navigator's default Ctrl-* mappings.
@@ -32,6 +31,10 @@ Plug 'majutsushi/tagbar'
 Plug 'tpope/vim-speeddating'
 " Linting
 Plug 'dense-analysis/ale'
+Plug 'prabirshrestha/vim-lsp'
+" Project tags and manual completion
+Plug 'ludovicchabant/vim-gutentags'
+Plug 'lifepillar/vim-mucomplete'
 " :FZF [directory]
 set rtp+=~/.fzf
 Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
@@ -343,14 +346,15 @@ function! s:TmuxNavigateVertical(direction) abort
     endif
 endfunction
 
-silent! nunmap <C-h>
-silent! nunmap <C-j>
-silent! nunmap <C-k>
-silent! nunmap <C-l>
-silent! tunmap <C-h>
-silent! tunmap <C-j>
-silent! tunmap <C-k>
-silent! tunmap <C-l>
+for s:key in ['<C-h>', '<C-j>', '<C-k>', '<C-l>']
+    if !empty(maparg(s:key, 'n'))
+        execute 'nunmap ' . s:key
+    endif
+    if !empty(maparg(s:key, 't'))
+        execute 'tunmap ' . s:key
+    endif
+endfor
+unlet s:key
 
 nnoremap <silent> <M-h> :<C-U>TmuxNavigateLeft<cr>
 nnoremap <silent> <M-j> :<C-U>call <SID>TmuxNavigateVertical('j')<cr>
@@ -467,9 +471,6 @@ nnoremap <Leader>s "sy:ZZWrap .,%s///gc<Left><Left><Left><Left>
 " Plugin settings
 let g:org_agenda_files = ['~/org/*.org']
 
-" FIXME Tmux complete settings
-let g:tmuxcomplete#trigger = 'completefunc'
-
 " Enhanced diff settings
 " Automatically set diffexpr to patience when vim is started In diff-mode
 if &diff
@@ -489,6 +490,8 @@ hi MatchWord cterm=underline gui=underline
 "let g:ycm_auto_trigger = 0
 
 " ALE settings
+let g:ale_completion_enabled = 0
+let g:ale_completion_autoimport = 1
 " Show error when hovering over highlited text
 let g:ale_echo_cursor = 1
 let g:ale_sign_column_always = 1
@@ -503,6 +506,43 @@ let g:ale_virtualtext_cursor=0
 " Highlight error/warning line
 highlight ALEErrorSign ctermbg=NONE ctermfg=Red
 highlight ALEWarningSign ctermbg=NONE ctermfg=Yellow
+command! ClangFormatFix ALEFix clang-format
+command! ClangTidyFix ALEFix clangtidy
+
+" Project completion and tags
+set completeopt=menuone,noselect
+if exists('+completepopup')
+    set completeopt+=popup
+    set completepopup=align:item,width:70,height:15,border:single,borderhighlight:Comment,highlight:Normal,close:off,resize:off
+endif
+let g:lsp_async_completion = 0
+let g:lsp_signature_help_enabled = 1
+let g:lsp_signature_help_delay = 150
+let g:lsp_diagnostics_echo_cursor = 1
+let g:lsp_diagnostics_echo_delay = 200
+let g:lsp_diagnostics_float_cursor = 0
+let g:lsp_diagnostics_virtual_text_enabled = 0
+let g:lsp_preview_float = 1
+let g:lsp_preview_max_width = 70
+let g:lsp_preview_max_height = 15
+let g:lsp_popup_highlight = 'Normal'
+let g:lsp_popup_borderchars = ['─', '│', '─', '│', '┌', '┐', '┘', '└']
+let g:mucomplete#no_mappings = 1
+let g:mucomplete#enable_auto_at_startup = 0
+let g:mucomplete#chains = {
+            \ 'default': ['omni', 'tags', 'keyn', 'path'],
+            \ 'vim': ['cmd', 'keyn', 'path'],
+            \ }
+let g:gutentags_enabled = 1
+let g:gutentags_define_advanced_commands = 1
+let g:gutentags_cache_dir = expand('~/.cache/vim/tags')
+let g:gutentags_project_root = ['.vim-project.json']
+let g:gutentags_add_default_project_roots = 0
+let g:gutentags_init_user_func = 'configs_project#tags_enabled'
+let g:gutentags_ctags_exclude = [
+            \ '.git', 'build', 'build-*', 'node_modules',
+            \ '__pycache__', '.mypy_cache', '.pytest_cache', '*.egg-info',
+            \ ]
 
 " FZF settings
 " Customize fzf colors to match vim's color scheme
@@ -575,6 +615,8 @@ if filereadable(s:theme_file)
 else
     colorscheme molokai
 endif
+
+call configs_project#setup()
 
 if filereadable(expand('~/.vimrc.local'))
     execute 'source' fnameescape(expand('~/.vimrc.local'))

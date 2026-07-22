@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+import argparse
+import json
+import subprocess
+from pathlib import Path
+
+
+def git_root(path):
+    result = subprocess.run(
+        ["git", "-C", str(path), "rev-parse", "--show-toplevel"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    return Path(result.stdout.strip()) if result.returncode == 0 else path.resolve()
+
+
+def relative(root, path):
+    return str(path.relative_to(root)) or "."
+
+
+def build_profile(root):
+    python_roots = [name for name in ("src", "tests", "scripts", "benchmarks", "examples") if (root / name).is_dir()]
+    excluded = [name for name in ("build", "external", "vendor", "data", "node_modules") if (root / name).exists()]
+    databases = sorted(root.glob("build*/**/compile_commands.json"))
+    clangd_projects = []
+    for database in databases:
+        cache = database.parent / "CMakeCache.txt"
+        source = root
+        if cache.is_file():
+            for line in cache.read_text(errors="ignore").splitlines():
+                if line.startswith("CMAKE_HOME_DIRECTORY:INTERNAL="):
+                    candidate = Path(line.split("=", 1)[1]).resolve()
+                    if candidate == root or root in candidate.parents:
+                        source = candidate
+                    break
+        clangd_projects.append({
+            "source": relative(root, source),
+            "compilation_database": relative(root, database.parent),
+        })
+
+    return {
+        "version": 1,
+        "name": root.name,
+        "ale": True,
+        "completion": {"enabled": True},
+        "tags": {"enabled": True},
+        "python": {
+            "enabled": bool(python_roots),
+            "executable": "zuban",
+            "roots": python_roots,
+            "exclude": excluded,
+        },
+        "clangd": {"projects": clangd_projects},
+    }
+
+
+def validate(profile):
+    if profile.get("version") != 1:
+        raise ValueError("unsupported profile version")
+    if not isinstance(profile.get("name"), str):
+        raise ValueError("name must be a string")
+    for project in profile.get("clangd", {}).get("projects", []):
+        if "source" not in project or "compilation_database" not in project:
+            raise ValueError("clangd projects require source and compilation_database")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate a Vim project profile")
+    parser.add_argument("directory", nargs="?", default=".")
+    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--force", action="store_true")
+    args = parser.parse_args()
+
+    root = git_root(Path(args.directory))
+    output = root / ".vim-project.json"
+    if args.check:
+        validate(json.loads(output.read_text()))
+        print(output)
+        return
+    if output.exists() and not args.force:
+        raise SystemExit(f"{output} already exists; use --force to replace it")
+    profile = build_profile(root)
+    validate(profile)
+    output.write_text(json.dumps(profile, indent=2) + "\n")
+    print(output)
+
+
+if __name__ == "__main__":
+    main()

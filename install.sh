@@ -10,6 +10,7 @@ INSTALL_ZSH="${INSTALL_ZSH:-true}"
 INSTALL_OH_MY_ZSH="${INSTALL_OH_MY_ZSH:-true}"
 CHANGE_DEFAULT_SHELL="${CHANGE_DEFAULT_SHELL:-true}"
 INSTALL_EXTRA_TOOLS="${INSTALL_EXTRA_TOOLS:-true}"
+INSTALL_COMPLETION_TOOLS="${INSTALL_COMPLETION_TOOLS:-true}"
 INSTALL_DOCKER="${INSTALL_DOCKER:-prompt}"
 INSTALL_CONDA="${INSTALL_CONDA:-prompt}"
 INSTALL_MAMBA="${INSTALL_MAMBA:-true}"
@@ -369,6 +370,57 @@ install_fzf() {
     "$HOME/.fzf/install" --all --no-update-rc
 }
 
+install_zuban() {
+    local wheel
+    local pip_args=(--user --upgrade)
+
+    if command -v zuban >/dev/null 2>&1; then
+        echo "Zuban already installed"
+        return
+    fi
+    if python3 -m pip install --help 2>/dev/null | grep -q -- '--break-system-packages'; then
+        pip_args+=(--break-system-packages)
+    fi
+    if [ "$OFFLINE_MODE" = true ]; then
+        wheel="$(find_source_file 'zuban-*.whl' || true)"
+        if [ -z "$wheel" ]; then
+            echo "Offline Zuban install requires a zuban-*.whl file in sources/" >&2
+            exit 1
+        fi
+        python3 -m pip install "${pip_args[@]}" --no-index "$wheel"
+    else
+        python3 -m pip install "${pip_args[@]}" zuban
+    fi
+}
+
+verify_vim_features() {
+    local feature
+    local function_name
+    local version
+
+    version="$(vim --version)"
+    for feature in \
+        autocmd channel cscope insert_expand job lambda lua menu multi_byte \
+        perl popupwin python3 quickfix ruby terminal termguicolors textprop timers; do
+        if ! grep -Eq "(^|[[:space:]])[+]$feature([[:space:]]|$)" <<<"$version"; then
+            echo "Vim is missing +$feature, required by the configured plugins" >&2
+            exit 1
+        fi
+    done
+    for function_name in complete_info json_decode popup_create; do
+        if ! vim --clean -Nu NONE -n -es \
+            "+if !exists('*$function_name') | cquit | endif" +qa; then
+            echo "Vim is missing $function_name(), required by the configured plugins" >&2
+            exit 1
+        fi
+    done
+    if ! vim --clean -Nu NONE -n -es \
+        '+if !exists("+completepopup") | cquit | endif' +qa; then
+        echo "Vim is missing the completepopup option" >&2
+        exit 1
+    fi
+}
+
 install_vim_plugins_from_config() {
     local line
     local repo
@@ -605,12 +657,18 @@ apt_install \
     python3-pip \
     python3-subunit \
     python3-venv \
+    universal-ctags \
     patch \
     socat \
     texinfo \
     wget \
     xz-utils \
     zstd
+
+if should_run "$INSTALL_COMPLETION_TOOLS" "Install completion and language-server tools?" yes; then
+    apt_install_available clangd clang-format clang-tidy
+    install_zuban
+fi
 
 ensure_en_us_utf8_locale
 
@@ -665,7 +723,7 @@ if should_run "$CONFIGURE_TERMINAL_FONT" "Set GNOME Terminal to $NERD_FONT_FAMIL
 fi
 
 if should_run "$INSTALL_ZSH" "Install zsh and zsh helper packages?" yes; then
-    apt_install zsh universal-ctags cowsay fortune-mod
+    apt_install zsh cowsay fortune-mod
 fi
 
 if [ "$VIM_FROM_SOURCE" = true ]; then
@@ -688,6 +746,7 @@ if [ "$VIM_FROM_SOURCE" = true ]; then
     (
         cd "$VIM_SRC_DIR"
         ./configure \
+            --enable-fail-if-missing \
             --with-features=huge \
             --enable-multibyte \
             --with-python3-command="$(command -v python3)" \
@@ -711,6 +770,8 @@ else
     echo "Installing Vim from apt..."
     apt_install vim
 fi
+
+verify_vim_features
 
 if [ "$TMUX_FROM_SOURCE" = true ]; then
     echo "Installing tmux build dependencies..."
@@ -745,6 +806,7 @@ rsync -ah "$REPO_DIR/.vimrc" "$REPO_DIR/.zshrc" "$HOME/"
 rsync -ah "$REPO_DIR/.tmux.conf" "$TMUX_CONFIG_ROOT/"
 mkdir -p "$HOME/.local/bin"
 rsync -ah "$REPO_DIR/bin/select-config" "$HOME/.local/bin/"
+rsync -ah "$REPO_DIR/bin/configure-vim-project" "$HOME/.local/bin/"
 rsync -ah "$REPO_DIR/bin/picker_ui.py" "$HOME/.local/bin/"
 mkdir -p "$HOME/.tmux/bin" "$HOME/.tmux/themes"
 rsync -ah "$REPO_DIR/bin/select-tmux-theme" "$HOME/.tmux/bin/"
@@ -755,6 +817,8 @@ install_tmux_plugins_from_config
 install_tmux_theme_plugins
 
 mkdir -p "$VIM_CONFIG_DIR/colors" "$VIM_CONFIG_DIR/bin" "$NVIM_CONFIG_DIR/colors"
+mkdir -p "$VIM_CONFIG_DIR/autoload"
+rsync -ah "$REPO_DIR/autoload/configs_project.vim" "$VIM_CONFIG_DIR/autoload/"
 rsync -ah "$REPO_DIR/themes/"*.vim "$VIM_CONFIG_DIR/colors/"
 rsync -ah "$REPO_DIR/.vimrc" "$NVIM_CONFIG_DIR/init.vim"
 rsync -ah "$REPO_DIR/themes/"*.vim "$NVIM_CONFIG_DIR/colors/"
