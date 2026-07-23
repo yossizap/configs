@@ -78,6 +78,11 @@ def tmux_plugin_name(theme):
     return name
 
 
+def tmux_plugin_cache(theme):
+    repo = theme.repo[:-4] if theme.repo.endswith(".git") else theme.repo
+    return HOME / ".tmux/theme-plugins" / repo.replace("/", "-")
+
+
 def local_theme_path():
     for base in (THEME_DIR, REPO_THEME_DIR):
         path = base / "molokai.conf"
@@ -216,15 +221,29 @@ def apply_theme(theme):
         return
     subprocess.run(["tmux", "source-file", "-q", str(TMUX_CONF)], check=False)
     installer = HOME / ".tmux/plugins/tpm/bin/install_plugins"
-    if theme.kind == "upstream" and installer.exists():
-        shutil.rmtree(HOME / ".tmux/plugins" / tmux_plugin_name(theme), ignore_errors=True)
-        subprocess.run([str(installer)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    if theme.kind == "upstream":
+        installed = HOME / ".tmux/plugins" / tmux_plugin_name(theme)
+        cache = tmux_plugin_cache(theme)
+        shutil.rmtree(installed, ignore_errors=True)
+        if (cache / ".git").is_dir():
+            subprocess.run(
+                ["git", "clone", "--depth", "1", str(cache), str(installed)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+        elif installer.exists():
+            subprocess.run([str(installer)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
         subprocess.run(["tmux", "source-file", "-q", str(TMUX_CONF)], check=False)
 
 
 def clone_theme(theme, dest):
     repo = f"https://github.com/{theme.repo}.git"
     installed = HOME / ".tmux/plugins" / tmux_plugin_name(theme)
+    cache = tmux_plugin_cache(theme)
+    if (cache / ".git").is_dir():
+        run(["git", "clone", "--depth", "1", str(cache), str(dest)], stdout=subprocess.DEVNULL)
+        return
     if (installed / ".git").is_dir():
         run(["git", "clone", "--depth", "1", str(installed), str(dest)], stdout=subprocess.DEVNULL)
         return

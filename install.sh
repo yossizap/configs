@@ -28,6 +28,8 @@ NERD_FONT_URL="${NERD_FONT_URL:-https://github.com/ryanoasis/nerd-fonts/releases
 SRC_ROOT="${SRC_ROOT:-$REPO_DIR/sources}"
 VIM_SRC_DIR="${VIM_SRC_DIR:-$SRC_ROOT/vim}"
 TMUX_SRC_DIR="${TMUX_SRC_DIR:-$SRC_ROOT/tmux}"
+VIM_PREFIX="${VIM_PREFIX:-/usr/local}"
+TMUX_PREFIX="${TMUX_PREFIX:-/usr/local}"
 VIM_CONFIG_DIR="${VIM_CONFIG_DIR:-$HOME/.vim}"
 NVIM_CONFIG_DIR="${NVIM_CONFIG_DIR:-$HOME/.config/nvim}"
 TMUX_CONFIG_ROOT="${TMUX_CONFIG_ROOT:-$HOME}"
@@ -206,6 +208,20 @@ fetch_file() {
     cp "$source" "$dest"
 }
 
+install_config_file() {
+    local source="$1"
+    local dest="$2"
+
+    mkdir -p "$(dirname "$dest")"
+    if { [ -e "$dest" ] || [ -L "$dest" ]; } &&
+        ! cmp -s "$source" "$dest" &&
+        { [ ! -e "$dest.bak" ] && [ ! -L "$dest.bak" ]; }; then
+        cp -a -- "$dest" "$dest.bak"
+        echo "Backed up $dest to $dest.bak"
+    fi
+    rsync -ah -- "$source" "$dest"
+}
+
 normalize_repo_url() {
     local repo="$1"
 
@@ -330,9 +346,13 @@ clone_or_update() {
         fi
         git -C "$dest" remote set-url origin "$repo" ||
             git -C "$dest" remote add origin "$repo"
-        git -C "$dest" fetch --depth 1 origin "$ref" ||
+        git -C "$dest" fetch --depth 1 origin "$ref" 2>/dev/null ||
             git -C "$dest" fetch --depth 1 origin
-        git -C "$dest" checkout --detach FETCH_HEAD
+        if [ "$(git -C "$dest" rev-parse HEAD)" = "$(git -C "$dest" rev-parse 'FETCH_HEAD^{commit}')" ]; then
+            echo "Using existing checkout: $dest"
+        else
+            git -C "$dest" checkout --detach FETCH_HEAD
+        fi
     elif [ -e "$dest" ]; then
         echo "Source path exists and is not a git checkout: $dest" >&2
         exit 1
@@ -346,8 +366,12 @@ clone_or_update() {
             exit 1
         fi
     else
-        git clone --depth 1 --single-branch --branch "$ref" "$repo" "$dest" ||
+        if [ "$ref" = master ]; then
             git clone --depth 1 "$repo" "$dest"
+        else
+            git clone --depth 1 --single-branch --branch "$ref" "$repo" "$dest" ||
+                git clone --depth 1 "$repo" "$dest"
+        fi
     fi
 }
 
@@ -396,9 +420,10 @@ install_zuban() {
 verify_vim_features() {
     local feature
     local function_name
+    local vim_bin="$1"
     local version
 
-    version="$(vim --version)"
+    version="$("$vim_bin" --version)"
     for feature in \
         autocmd channel cscope insert_expand job lambda lua menu multi_byte \
         perl popupwin python3 quickfix ruby terminal termguicolors textprop timers; do
@@ -408,13 +433,13 @@ verify_vim_features() {
         fi
     done
     for function_name in complete_info json_decode popup_create; do
-        if ! vim --clean -Nu NONE -n -es \
+        if ! "$vim_bin" --clean -Nu NONE -n -es \
             "+if !exists('*$function_name') | cquit | endif" +qa; then
             echo "Vim is missing $function_name(), required by the configured plugins" >&2
             exit 1
         fi
     done
-    if ! vim --clean -Nu NONE -n -es \
+    if ! "$vim_bin" --clean -Nu NONE -n -es \
         '+if !exists("+completepopup") | cquit | endif' +qa; then
         echo "Vim is missing the completepopup option" >&2
         exit 1
@@ -467,11 +492,12 @@ install_tmux_theme_plugins() {
     local repo
     local name
 
+    mkdir -p "$HOME/.tmux/theme-plugins"
     while IFS= read -r repo; do
         [ -n "$repo" ] || continue
-        name="${repo##*/}"
+        name="${repo//\//-}"
         name="${name%.git}"
-        clone_or_update "https://github.com/$repo.git" "$HOME/.tmux/plugins/$name" master
+        clone_or_update "https://github.com/$repo.git" "$HOME/.tmux/theme-plugins/$name" master
     done < <("$REPO_DIR/bin/select-tmux-theme" --repos)
 }
 
@@ -630,6 +656,8 @@ apt_install \
     fd-find \
     ripgrep \
     rsync \
+    openssh-server \
+    net-tools \
     python3 \
     unzip \
     fontconfig \
@@ -681,7 +709,6 @@ if should_run "$INSTALL_EXTRA_TOOLS" "Install extra command-line tools?" yes; th
         jq \
         lsof \
         minicom \
-        net-tools \
         picocom \
         ranger \
         shellcheck \
@@ -727,6 +754,7 @@ if should_run "$INSTALL_ZSH" "Install zsh and zsh helper packages?" yes; then
 fi
 
 if [ "$VIM_FROM_SOURCE" = true ]; then
+    vim_head_before="$(git -C "$VIM_SRC_DIR" rev-parse HEAD 2>/dev/null || true)"
     echo "Installing Vim build dependencies..."
     apt_install \
         autoconf \
@@ -742,38 +770,74 @@ if [ "$VIM_FROM_SOURCE" = true ]; then
     echo "Building Vim from source..."
     mkdir -p "$SRC_ROOT"
     clone_or_update https://github.com/vim/vim.git "$VIM_SRC_DIR" "$VIM_REF"
-    make -C "$VIM_SRC_DIR" distclean >/dev/null 2>&1 || true
+    vim_head_after="$(git -C "$VIM_SRC_DIR" rev-parse HEAD)"
+    vim_configure_state="$SRC_ROOT/.vim-configure"
+    vim_configure_options="$(
+        printf '%s\n' \
+            "--enable-fail-if-missing" \
+            "--with-features=huge" \
+            "--enable-multibyte" \
+            "--with-python3-command=$(command -v python3)" \
+            "--enable-rubyinterp=yes" \
+            "--enable-python3interp=yes" \
+            "--enable-perlinterp=yes" \
+            "--enable-luainterp=yes" \
+            "--with-lua-prefix=/usr" \
+            "--enable-cscope" \
+            "--disable-gui" \
+            "--prefix=$VIM_PREFIX"
+    )"
+    vim_reconfigure=false
+    if [ ! -f "$VIM_SRC_DIR/src/auto/config.mk" ] ||
+        [ "$vim_head_before" != "$vim_head_after" ] ||
+        [ ! -f "$vim_configure_state" ] ||
+        [ "$(cat "$vim_configure_state")" != "$vim_configure_options" ]; then
+        vim_reconfigure=true
+    fi
     (
         cd "$VIM_SRC_DIR"
-        ./configure \
-            --enable-fail-if-missing \
-            --with-features=huge \
-            --enable-multibyte \
-            --with-python3-command="$(command -v python3)" \
-            --with-python3-config-dir="$(python3-config --configdir)" \
-            --enable-rubyinterp=yes \
-            --enable-python3interp=yes \
-            --enable-perlinterp=yes \
-            --enable-luainterp=yes \
-            --with-lua-prefix=/usr \
-            --enable-cscope \
-            --disable-gui \
-            --prefix=/usr/local
+        if [ "$vim_reconfigure" = true ]; then
+            rm -f src/auto/config.cache
+            ./configure \
+                --enable-fail-if-missing \
+                --with-features=huge \
+                --enable-multibyte \
+                --with-python3-command="$(command -v python3)" \
+                --enable-rubyinterp=yes \
+                --enable-python3interp=yes \
+                --enable-perlinterp=yes \
+                --enable-luainterp=yes \
+                --with-lua-prefix=/usr \
+                --enable-cscope \
+                --disable-gui \
+                --prefix="$VIM_PREFIX"
+            printf '%s\n' "$vim_configure_options" > "$vim_configure_state"
+        else
+            echo "Reusing existing Vim configuration"
+        fi
         make -j"$(nproc)"
         $SUDO make install
     )
-    if ! vim --version | grep -q '+python3'; then
+    vim_bin="$VIM_PREFIX/bin/vim"
+    hash -r
+    if [ ! -x "$vim_bin" ]; then
+        echo "Vim was not installed at $vim_bin" >&2
+        exit 1
+    fi
+    if ! "$vim_bin" --version | grep -q '+python3'; then
         echo "Vim was built without +python3; UltiSnips requires Python 3 support." >&2
         exit 1
     fi
 else
     echo "Installing Vim from apt..."
     apt_install vim
+    vim_bin="$(command -v vim)"
 fi
 
-verify_vim_features
+verify_vim_features "$vim_bin"
 
 if [ "$TMUX_FROM_SOURCE" = true ]; then
+    tmux_head_before="$(git -C "$TMUX_SRC_DIR" rev-parse HEAD 2>/dev/null || true)"
     echo "Installing tmux build dependencies..."
     apt_install \
         autoconf \
@@ -786,11 +850,26 @@ if [ "$TMUX_FROM_SOURCE" = true ]; then
     echo "Building tmux from source..."
     mkdir -p "$SRC_ROOT"
     clone_or_update https://github.com/tmux/tmux.git "$TMUX_SRC_DIR" "$TMUX_REF"
-    make -C "$TMUX_SRC_DIR" distclean >/dev/null 2>&1 || true
+    tmux_head_after="$(git -C "$TMUX_SRC_DIR" rev-parse HEAD)"
+    tmux_configure_state="$SRC_ROOT/.tmux-configure"
+    tmux_configure_options="--prefix=$TMUX_PREFIX"
+    tmux_reconfigure=false
+    if [ ! -f "$TMUX_SRC_DIR/Makefile" ] ||
+        [ "$tmux_head_before" != "$tmux_head_after" ] ||
+        [ ! -f "$tmux_configure_state" ] ||
+        [ "$(cat "$tmux_configure_state")" != "$tmux_configure_options" ]; then
+        tmux_reconfigure=true
+    fi
     (
         cd "$TMUX_SRC_DIR"
-        sh autogen.sh
-        ./configure --prefix=/usr/local
+        if [ "$tmux_reconfigure" = true ]; then
+            rm -f config.cache
+            sh autogen.sh
+            ./configure --prefix="$TMUX_PREFIX"
+            printf '%s\n' "$tmux_configure_options" > "$tmux_configure_state"
+        else
+            echo "Reusing existing tmux configuration"
+        fi
         make -j"$(nproc)"
         $SUDO make install
     )
@@ -802,8 +881,9 @@ fi
 install_fzf
 
 echo "Copying configuration files..."
-rsync -ah "$REPO_DIR/.vimrc" "$REPO_DIR/.zshrc" "$HOME/"
-rsync -ah "$REPO_DIR/.tmux.conf" "$TMUX_CONFIG_ROOT/"
+install_config_file "$REPO_DIR/.vimrc" "$HOME/.vimrc"
+install_config_file "$REPO_DIR/.zshrc" "$HOME/.zshrc"
+install_config_file "$REPO_DIR/.tmux.conf" "$TMUX_CONFIG_ROOT/.tmux.conf"
 mkdir -p "$HOME/.local/bin"
 rsync -ah "$REPO_DIR/bin/select-config" "$HOME/.local/bin/"
 rsync -ah "$REPO_DIR/bin/configure-vim-project" "$HOME/.local/bin/"
@@ -820,7 +900,7 @@ mkdir -p "$VIM_CONFIG_DIR/colors" "$VIM_CONFIG_DIR/bin" "$NVIM_CONFIG_DIR/colors
 mkdir -p "$VIM_CONFIG_DIR/autoload"
 rsync -ah "$REPO_DIR/autoload/configs_project.vim" "$VIM_CONFIG_DIR/autoload/"
 rsync -ah "$REPO_DIR/themes/"*.vim "$VIM_CONFIG_DIR/colors/"
-rsync -ah "$REPO_DIR/.vimrc" "$NVIM_CONFIG_DIR/init.vim"
+install_config_file "$REPO_DIR/.vimrc" "$NVIM_CONFIG_DIR/init.vim"
 rsync -ah "$REPO_DIR/themes/"*.vim "$NVIM_CONFIG_DIR/colors/"
 rsync -ah "$REPO_DIR/bin/select-vim-theme" "$VIM_CONFIG_DIR/bin/"
 rsync -ah "$REPO_DIR/bin/picker_ui.py" "$VIM_CONFIG_DIR/bin/"
@@ -833,9 +913,9 @@ fetch_file https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim \
 if should_run "$INSTALL_VIM_PLUGINS" "Install Vim plugins with vim-plug?" yes; then
     install_vim_plugins_from_config
     echo "Installing Vim plugins..."
-    vim +'PlugInstall --sync' +qa
+    "$vim_bin" -Nu "$HOME/.vimrc" -n -es +'PlugInstall --sync' +qa
     if command -v nvim >/dev/null 2>&1; then
-        nvim +'PlugInstall --sync' +qa
+        nvim --headless -u "$NVIM_CONFIG_DIR/init.vim" +'PlugInstall --sync' +qa
     fi
 fi
 
