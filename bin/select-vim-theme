@@ -6,7 +6,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,7 +18,9 @@ PREVIEW = os.environ.get("VIM_THEME_PREVIEW", "true") != "false"
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_THEME_DIR = Path(os.environ.get("VIM_THEME_SOURCE_DIR", SCRIPT_DIR.parent / "themes"))
 PLUG_VIM = HOME / ".vim/autoload/plug.vim"
-PLUG_VIM_URL = "https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim"
+PLUG_VIM_SOURCE = Path(
+    os.environ.get("VIM_PLUG_SOURCE_DIR", HOME / ".vim/vim-plug")
+)
 
 
 DARK_THEMES = [
@@ -218,8 +219,41 @@ endfor
 
 def run_plug_install():
     if not PLUG_VIM.exists():
+        if PLUG_VIM_SOURCE.exists() and not (PLUG_VIM_SOURCE / ".git").is_dir():
+            die(f"{PLUG_VIM_SOURCE} exists but is not a Git checkout")
+        if (PLUG_VIM_SOURCE / ".git").is_dir():
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(PLUG_VIM_SOURCE),
+                    "fetch",
+                    "--depth",
+                    "1",
+                    "origin",
+                    "master",
+                ],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(PLUG_VIM_SOURCE), "checkout", "--detach", "FETCH_HEAD"],
+                check=True,
+            )
+        else:
+            PLUG_VIM_SOURCE.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run(
+                [
+                    "git",
+                    "clone",
+                    "--depth",
+                    "1",
+                    "https://github.com/junegunn/vim-plug.git",
+                    str(PLUG_VIM_SOURCE),
+                ],
+                check=True,
+            )
         PLUG_VIM.parent.mkdir(parents=True, exist_ok=True)
-        urllib.request.urlretrieve(PLUG_VIM_URL, PLUG_VIM)
+        shutil.copy2(PLUG_VIM_SOURCE / "plug.vim", PLUG_VIM)
     subprocess.run(["vim", "+PlugInstall --sync", "+qa"], check=False)
 
 

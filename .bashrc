@@ -124,4 +124,10 @@ bind '"\e[B": history-search-forward'
 
 export EDITOR='vim'
 
-[ -f ~/.fzf.bash ] && source ~/.fzf.bash
+if command -v fzf >/dev/null 2>&1; then
+    [ -r /usr/share/bash-completion/completions/fzf ] &&
+        source /usr/share/bash-completion/completions/fzf
+    [ -r /usr/share/doc/fzf/examples/key-bindings.bash ] &&
+        source /usr/share/doc/fzf/examples/key-bindings.bash
+    true
+fi

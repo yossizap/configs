@@ -13,7 +13,7 @@ INSTALL_EXTRA_TOOLS="${INSTALL_EXTRA_TOOLS:-true}"
 INSTALL_COMPLETION_TOOLS="${INSTALL_COMPLETION_TOOLS:-true}"
 INSTALL_DOCKER="${INSTALL_DOCKER:-prompt}"
 INSTALL_CONDA="${INSTALL_CONDA:-prompt}"
-INSTALL_MAMBA="${INSTALL_MAMBA:-true}"
+INSTALL_MAMBA="${INSTALL_MAMBA:-false}"
 INSTALL_NERD_FONT="${INSTALL_NERD_FONT:-true}"
 NERD_FONT_REFRESH="${NERD_FONT_REFRESH:-false}"
 CONFIGURE_TERMINAL_FONT="${CONFIGURE_TERMINAL_FONT:-true}"
@@ -24,10 +24,11 @@ TMUX_REF="${TMUX_REF:-3.5a}"
 NERD_FONT_NAME="${NERD_FONT_NAME:-JetBrainsMono}"
 NERD_FONT_FAMILY="${NERD_FONT_FAMILY:-JetBrainsMono Nerd Font Mono}"
 NERD_FONT_SIZE="${NERD_FONT_SIZE:-14}"
-NERD_FONT_URL="${NERD_FONT_URL:-https://github.com/ryanoasis/nerd-fonts/releases/latest/download/${NERD_FONT_NAME}.zip}"
 SRC_ROOT="${SRC_ROOT:-$REPO_DIR/sources}"
 VIM_SRC_DIR="${VIM_SRC_DIR:-$SRC_ROOT/vim}"
 TMUX_SRC_DIR="${TMUX_SRC_DIR:-$SRC_ROOT/tmux}"
+NERD_FONT_SRC_DIR="${NERD_FONT_SRC_DIR:-$SRC_ROOT/nerd-fonts}"
+VIM_PLUG_SRC_DIR="${VIM_PLUG_SRC_DIR:-$SRC_ROOT/vim-plug}"
 VIM_PREFIX="${VIM_PREFIX:-/usr/local}"
 TMUX_PREFIX="${TMUX_PREFIX:-/usr/local}"
 VIM_CONFIG_DIR="${VIM_CONFIG_DIR:-$HOME/.vim}"
@@ -35,10 +36,9 @@ NVIM_CONFIG_DIR="${NVIM_CONFIG_DIR:-$HOME/.config/nvim}"
 TMUX_CONFIG_ROOT="${TMUX_CONFIG_ROOT:-$HOME}"
 USER_FONT_DIR="${USER_FONT_DIR:-$HOME/.local/share/fonts/$NERD_FONT_NAME}"
 INSTALL_USER="${INSTALL_USER:-${SUDO_USER:-$(id -un)}}"
-CONDA_DIR="${CONDA_DIR:-$HOME/miniforge3}"
-CONDA_INSTALLER_URL="${CONDA_INSTALLER_URL:-https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-$(uname -m).sh}"
-NERD_FONT_ARCHIVE="${NERD_FONT_ARCHIVE:-$SRC_ROOT/${NERD_FONT_NAME}.zip}"
-CONDA_INSTALLER="${CONDA_INSTALLER:-$SRC_ROOT/Miniforge3-Linux-$(uname -m).sh}"
+CONDA_DIR="${CONDA_DIR:-$HOME/miniconda3}"
+CONDA_CHANNEL="${CONDA_CHANNEL:-https://repo.anaconda.com/pkgs/main}"
+MAMBA_CHANNEL="${MAMBA_CHANNEL:-conda-forge}"
 
 if command -v sudo >/dev/null 2>&1 && [ "$(id -u)" -ne 0 ]; then
     SUDO=sudo
@@ -107,13 +107,18 @@ set_wsl_conf_value() {
 
 configure_wsl() {
     local usbip_path
+    local windows_profile
+    local windows_workspace
 
     if ! is_wsl; then
         return
     fi
 
     echo "Configuring WSL integration..."
-    apt_install_available linux-tools-virtual hwdata usbutils
+    apt_install_available linux-tools-virtual hwdata usbutils systemd systemd-sysv
+    if [ -f /etc/wsl.conf ] && [ ! -e /etc/wsl.conf.bak ]; then
+        $SUDO cp -a /etc/wsl.conf /etc/wsl.conf.bak
+    fi
 
     if ! command -v usbip >/dev/null 2>&1; then
         usbip_path="$(find /usr/lib/linux-tools -path '*/usbip' -type f 2>/dev/null | sort -V | tail -n 1 || true)"
@@ -126,6 +131,33 @@ configure_wsl() {
 
     set_wsl_conf_value boot systemd true
     set_wsl_conf_value user default "$INSTALL_USER"
+    set_wsl_conf_value automount enabled true
+    set_wsl_conf_value automount root /mnt/
+    set_wsl_conf_value automount options '"metadata,umask=022,fmask=011,case=dir"'
+    set_wsl_conf_value automount mountFsTab true
+    set_wsl_conf_value network generateHosts true
+    set_wsl_conf_value network generateResolvConf true
+    set_wsl_conf_value interop enabled true
+    set_wsl_conf_value interop appendWindowsPath true
+    set_wsl_conf_value time useWindowsTimezone true
+
+    $SUDO systemctl enable ssh.service
+    if [ "$(ps -p 1 -o comm=)" = systemd ]; then
+        $SUDO systemctl restart ssh.service
+    fi
+
+    if command -v cmd.exe >/dev/null 2>&1 && command -v wslpath >/dev/null 2>&1; then
+        windows_profile="$(cmd.exe /c '<nul set /p =%USERPROFILE%' 2>/dev/null | tr -d '\r')"
+        windows_profile="$(wslpath -u "$windows_profile" 2>/dev/null || true)"
+        if [ -n "$windows_profile" ] && [ -d "$windows_profile" ]; then
+            windows_workspace="$windows_profile/workspace"
+            mkdir -p "$windows_workspace"
+            if [ ! -e "$HOME/windows-workspace" ] && [ ! -L "$HOME/windows-workspace" ]; then
+                ln -s "$windows_workspace" "$HOME/windows-workspace"
+            fi
+            echo "Windows workspace: $HOME/windows-workspace"
+        fi
+    fi
 
     echo "WSL USB/IP Windows-side setup still needs PowerShell:"
     echo "  winget install --interactive --exact dorssel.usbipd-win"
@@ -137,6 +169,16 @@ configure_wsl() {
 
 apt_install() {
     DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y --no-install-recommends "$@"
+}
+
+update_apt_lists() {
+    if $SUDO apt-get update; then
+        echo "Upgrading installed packages..."
+        DEBIAN_FRONTEND=noninteractive $SUDO apt-get upgrade -y
+        return
+    fi
+
+    echo "apt-get update failed; continuing with the available package lists." >&2
 }
 
 apt_install_available() {
@@ -179,33 +221,6 @@ find_source_file() {
 
     [ -d "$SRC_ROOT" ] || return 1
     find "$SRC_ROOT" -type f -name "$name" -print -quit
-}
-
-fetch_file() {
-    local url="$1"
-    local source="$2"
-    local dest="$3"
-    local discovered
-
-    if [ ! -f "$source" ]; then
-        discovered="$(find_source_file "$(basename "$source")" || true)"
-        if [ -n "$discovered" ]; then
-            source="$discovered"
-        fi
-    fi
-    if [ ! -f "$source" ]; then
-        if [ "$OFFLINE_MODE" = true ]; then
-            if [ -f "$dest" ]; then
-                echo "Using offline file: $dest"
-                return
-            fi
-            echo "Missing offline file: $source" >&2
-            exit 1
-        fi
-        mkdir -p "$(dirname "$source")"
-        curl -fL "$url" -o "$source"
-    fi
-    cp "$source" "$dest"
 }
 
 install_config_file() {
@@ -376,22 +391,11 @@ clone_or_update() {
 }
 
 install_fzf() {
-    local fzf_binary
-
     echo "Installing fzf..."
-    clone_or_update https://github.com/junegunn/fzf.git "$HOME/.fzf" master
-    if [ "$OFFLINE_MODE" = true ] && [ ! -x "$HOME/.fzf/bin/fzf" ]; then
-        fzf_binary="$(find_source_file fzf || true)"
-        if [ -n "$fzf_binary" ]; then
-            mkdir -p "$HOME/.fzf/bin"
-            cp "$fzf_binary" "$HOME/.fzf/bin/fzf"
-            chmod 755 "$HOME/.fzf/bin/fzf"
-        else
-            echo "Offline fzf requires an fzf executable in sources/" >&2
-            exit 1
-        fi
+    if ! command -v fzf >/dev/null 2>&1; then
+        echo "The fzf apt package is installed but its executable is unavailable." >&2
+        exit 1
     fi
-    "$HOME/.fzf/install" --all --no-update-rc
 }
 
 install_zuban() {
@@ -502,7 +506,7 @@ install_tmux_theme_plugins() {
 }
 
 install_nerd_font() {
-    local tmp_zip
+    local font_source
 
     if [ "$NERD_FONT_REFRESH" != true ] &&
         command -v fc-match >/dev/null 2>&1 &&
@@ -512,11 +516,39 @@ install_nerd_font() {
     fi
 
     echo "Installing $NERD_FONT_FAMILY..."
+    if [ -d "$NERD_FONT_SRC_DIR/.git" ]; then
+        if [ "$OFFLINE_MODE" = true ]; then
+            echo "Using offline checkout: $NERD_FONT_SRC_DIR"
+        elif [ -z "$(git -C "$NERD_FONT_SRC_DIR" status --porcelain)" ]; then
+            git -C "$NERD_FONT_SRC_DIR" fetch --depth 1 origin master
+            git -C "$NERD_FONT_SRC_DIR" checkout --detach FETCH_HEAD
+        else
+            echo "Preserving modified checkout: $NERD_FONT_SRC_DIR"
+        fi
+    elif [ -e "$NERD_FONT_SRC_DIR" ]; then
+        echo "Source path exists and is not a git checkout: $NERD_FONT_SRC_DIR" >&2
+        exit 1
+    elif [ "$OFFLINE_MODE" = true ]; then
+        echo "Missing offline Git checkout: $NERD_FONT_SRC_DIR" >&2
+        exit 1
+    else
+        git clone --depth 1 --filter=blob:none --no-checkout \
+            https://github.com/ryanoasis/nerd-fonts.git "$NERD_FONT_SRC_DIR"
+    fi
+
+    git -C "$NERD_FONT_SRC_DIR" sparse-checkout init --cone
+    git -C "$NERD_FONT_SRC_DIR" sparse-checkout set "patched-fonts/$NERD_FONT_NAME"
+    git -C "$NERD_FONT_SRC_DIR" checkout
+    font_source="$NERD_FONT_SRC_DIR/patched-fonts/$NERD_FONT_NAME"
+    if ! find "$font_source" -type f -iname '*NerdFontMono*.ttf' -print -quit |
+        grep -q .; then
+        echo "No $NERD_FONT_FAMILY files found in $font_source" >&2
+        exit 1
+    fi
+
     mkdir -p "$USER_FONT_DIR"
-    tmp_zip="$(mktemp)"
-    fetch_file "$NERD_FONT_URL" "$NERD_FONT_ARCHIVE" "$tmp_zip"
-    unzip -qo "$tmp_zip" -d "$USER_FONT_DIR"
-    rm -f "$tmp_zip"
+    find "$font_source" -type f -iname '*NerdFontMono*.ttf' \
+        -exec cp -f -t "$USER_FONT_DIR" {} +
 
     if command -v fc-cache >/dev/null 2>&1; then
         fc-cache -f "$USER_FONT_DIR"
@@ -556,9 +588,14 @@ configure_terminal_font() {
 }
 
 install_conda_shortcuts() {
+    local package_command=conda
     local rc
     local marker_start="# >>> configs conda shortcuts >>>"
     local marker_end="# <<< configs conda shortcuts <<<"
+
+    if [ -x "$CONDA_DIR/bin/mamba" ]; then
+        package_command=mamba
+    fi
 
     for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
         touch "$rc"
@@ -571,9 +608,9 @@ fi
 alias cenv='conda env list'
 alias cact='conda activate'
 alias cdeact='conda deactivate'
-alias cnew='mamba create -n'
-alias cinst='mamba install'
-alias cup='mamba update'
+alias cnew='$package_command create -n'
+alias cinst='$package_command install'
+alias cup='$package_command update'
 alias cclean='conda clean -a'
 $marker_end
 EOF
@@ -581,16 +618,76 @@ EOF
 }
 
 install_conda() {
-    local tmp_installer
+    local archive
+    local filename
+    local repodata
+    local subdir
+    local tmp_dir
 
     if [ -x "$CONDA_DIR/bin/conda" ]; then
         echo "Conda already installed at $CONDA_DIR"
     else
-        echo "Installing Miniforge to $CONDA_DIR..."
-        tmp_installer="$(mktemp)"
-        fetch_file "$CONDA_INSTALLER_URL" "$CONDA_INSTALLER" "$tmp_installer"
-        bash "$tmp_installer" -b -p "$CONDA_DIR"
-        rm -f "$tmp_installer"
+        case "$(uname -m)" in
+            x86_64) subdir=linux-64 ;;
+            aarch64 | arm64) subdir=linux-aarch64 ;;
+            *)
+                echo "Conda is not supported on architecture $(uname -m)" >&2
+                exit 1
+                ;;
+        esac
+
+        archive="$(find_source_file 'conda-standalone-*_single_*.conda' || true)"
+        if [ -z "$archive" ]; then
+            archive="$(find_source_file 'conda-standalone-*_single_*.tar.bz2' || true)"
+        fi
+        tmp_dir="$(mktemp -d)"
+        if [ -z "$archive" ]; then
+            if [ "$OFFLINE_MODE" = true ]; then
+                echo "Missing conda-standalone archive under $SRC_ROOT" >&2
+                exit 1
+            fi
+
+            repodata="$tmp_dir/current_repodata.json"
+            curl -fL "$CONDA_CHANNEL/$subdir/current_repodata.json" -o "$repodata"
+            filename="$(python3 - "$repodata" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    repodata = json.load(source)
+
+candidates = [
+    (metadata.get("timestamp", 0), filename)
+    for packages in (repodata.get("packages", {}), repodata.get("packages.conda", {}))
+    for filename, metadata in packages.items()
+    if metadata.get("name") == "conda-standalone"
+    and "_single_" in metadata.get("build", "")
+]
+if not candidates:
+    raise SystemExit("conda-standalone was not found in current_repodata.json")
+print(max(candidates)[1])
+PY
+)"
+            archive="$tmp_dir/$filename"
+            curl -fL "$CONDA_CHANNEL/$subdir/$filename" -o "$archive"
+        fi
+
+        echo "Creating Conda environment at $CONDA_DIR..."
+        case "$archive" in
+            *.conda)
+                unzip -q "$archive" 'pkg-*.tar.zst' -d "$tmp_dir"
+                unzstd -c "$tmp_dir"/pkg-*.tar.zst | tar -xf - -C "$tmp_dir"
+                ;;
+            *.tar.bz2)
+                tar -xjf "$archive" -C "$tmp_dir"
+                ;;
+        esac
+        "$tmp_dir/standalone_conda/conda.exe" create -y \
+            --prefix "$CONDA_DIR" \
+            --override-channels \
+            --channel "$CONDA_CHANNEL" \
+            conda python pip
+        rm -rf "$tmp_dir"
     fi
 
     if [ "$INSTALL_MAMBA" = true ]; then
@@ -602,7 +699,7 @@ install_conda() {
             exit 1
         else
             echo "Installing mamba into the base conda environment..."
-            "$CONDA_DIR/bin/conda" install -n base -c conda-forge -y mamba
+            "$CONDA_DIR/bin/conda" install -n base -c "$MAMBA_CHANNEL" -y mamba
         fi
     fi
 
@@ -627,7 +724,7 @@ maybe_install_conda() {
                 if ask_yes_no "Conda already exists at $CONDA_DIR. Update mamba and shell shortcuts?" yes; then
                     install_conda
                 fi
-            elif ask_yes_no "Install Miniforge, mamba, and shell shortcuts at $CONDA_DIR?" no; then
+            elif ask_yes_no "Install Conda, mamba, and shell shortcuts at $CONDA_DIR?" no; then
                 install_conda
             else
                 echo "Skipping conda install"
@@ -645,7 +742,7 @@ if [ "$OFFLINE_MODE" = true ]; then
     echo "Offline mode enabled; skipping apt-get update"
 else
     echo "Updating package lists..."
-    $SUDO apt-get update
+    update_apt_lists
 fi
 
 echo "Installing common utilities..."
@@ -654,6 +751,7 @@ apt_install \
     curl \
     git \
     fd-find \
+    fzf \
     ripgrep \
     rsync \
     openssh-server \
@@ -754,18 +852,46 @@ if should_run "$INSTALL_ZSH" "Install zsh and zsh helper packages?" yes; then
 fi
 
 if [ "$VIM_FROM_SOURCE" = true ]; then
+    lua_version=
+    for candidate in 5.4 5.3; do
+        if apt-cache show "lua$candidate" >/dev/null 2>&1 &&
+            apt-cache show "liblua$candidate-dev" >/dev/null 2>&1; then
+            lua_version="$candidate"
+            break
+        fi
+    done
+    if [ -z "$lua_version" ]; then
+        echo "No supported Lua interpreter and development package found." >&2
+        exit 1
+    fi
+
     vim_head_before="$(git -C "$VIM_SRC_DIR" rev-parse HEAD 2>/dev/null || true)"
     echo "Installing Vim build dependencies..."
     apt_install \
         autoconf \
         libncurses-dev \
         python3-dev \
-        ruby-dev \
-        liblua5.3-dev \
-        lua5.3 \
+        perl \
         libperl-dev \
+        ruby \
+        ruby-dev \
+        libruby \
+        "liblua$lua_version-dev" \
+        "lua$lua_version" \
         libacl1-dev \
         libgpm-dev
+
+    lua_command="$(command -v lua || command -v "lua$lua_version" || true)"
+    if [ -z "$lua_command" ]; then
+        echo "Lua $lua_version was installed without a usable interpreter." >&2
+        exit 1
+    fi
+    perl_command="$(command -v perl || true)"
+    ruby_command="$(command -v ruby || true)"
+    if [ -z "$perl_command" ] || [ -z "$ruby_command" ]; then
+        echo "Perl and Ruby interpreters are required to build Vim." >&2
+        exit 1
+    fi
 
     echo "Building Vim from source..."
     mkdir -p "$SRC_ROOT"
@@ -778,6 +904,9 @@ if [ "$VIM_FROM_SOURCE" = true ]; then
             "--with-features=huge" \
             "--enable-multibyte" \
             "--with-python3-command=$(command -v python3)" \
+            "--with-lua-command=$lua_command" \
+            "--with-perl-command=$perl_command" \
+            "--with-ruby-command=$ruby_command" \
             "--enable-rubyinterp=yes" \
             "--enable-python3interp=yes" \
             "--enable-perlinterp=yes" \
@@ -798,11 +927,14 @@ if [ "$VIM_FROM_SOURCE" = true ]; then
         cd "$VIM_SRC_DIR"
         if [ "$vim_reconfigure" = true ]; then
             rm -f src/auto/config.cache
-            ./configure \
+            vi_cv_path_plain_lua="$lua_command" \
+                vi_cv_path_perl="$perl_command" \
+                ./configure \
                 --enable-fail-if-missing \
                 --with-features=huge \
                 --enable-multibyte \
                 --with-python3-command="$(command -v python3)" \
+                --with-ruby-command="$ruby_command" \
                 --enable-rubyinterp=yes \
                 --enable-python3interp=yes \
                 --enable-perlinterp=yes \
@@ -881,6 +1013,7 @@ fi
 install_fzf
 
 echo "Copying configuration files..."
+install_config_file "$REPO_DIR/.bashrc" "$HOME/.bashrc"
 install_config_file "$REPO_DIR/.vimrc" "$HOME/.vimrc"
 install_config_file "$REPO_DIR/.zshrc" "$HOME/.zshrc"
 install_config_file "$REPO_DIR/.tmux.conf" "$TMUX_CONFIG_ROOT/.tmux.conf"
@@ -907,8 +1040,8 @@ rsync -ah "$REPO_DIR/bin/picker_ui.py" "$VIM_CONFIG_DIR/bin/"
 
 echo "Installing vim-plug..."
 mkdir -p "$VIM_CONFIG_DIR/autoload"
-fetch_file https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim \
-    "$SRC_ROOT/plug.vim" "$VIM_CONFIG_DIR/autoload/plug.vim"
+clone_or_update https://github.com/junegunn/vim-plug.git "$VIM_PLUG_SRC_DIR" master
+rsync -ah "$VIM_PLUG_SRC_DIR/plug.vim" "$VIM_CONFIG_DIR/autoload/plug.vim"
 
 if should_run "$INSTALL_VIM_PLUGINS" "Install Vim plugins with vim-plug?" yes; then
     install_vim_plugins_from_config

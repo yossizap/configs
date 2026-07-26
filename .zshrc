@@ -69,6 +69,14 @@ export FZF_DEFAULT_COMMAND='rg --files --hidden --glob "!.git/*" --glob "!source
 export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border'
 
+if [[ ! -r /usr/share/doc/fzf/examples/completion.zsh &&
+      ! -r /usr/share/zsh/vendor-completions/_fzf ]]; then
+    DISABLE_FZF_AUTO_COMPLETION=true
+fi
+if [[ ! -r /usr/share/doc/fzf/examples/key-bindings.zsh ]]; then
+    DISABLE_FZF_KEY_BINDINGS=true
+fi
+
 if [ -f "$ZSH/oh-my-zsh.sh" ]; then
     source "$ZSH/oh-my-zsh.sh"
 fi

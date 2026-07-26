@@ -36,8 +36,7 @@ Plug 'prabirshrestha/vim-lsp'
 Plug 'ludovicchabant/vim-gutentags'
 Plug 'lifepillar/vim-mucomplete'
 " :FZF [directory]
-set rtp+=~/.fzf
-Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
+Plug 'junegunn/fzf'
 Plug 'junegunn/fzf.vim'
 " Switch between highlighted objects with %
 Plug 'andymass/vim-matchup'
