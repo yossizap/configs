@@ -45,8 +45,12 @@ ZSH_THEME="gentoo"
 # Would you like to use another custom folder than $ZSH/custom?
 # ZSH_CUSTOM=/path/to/new-custom-folder
 
-# Check the README's in ~/.oh-my-zsh/plugins/
-plugins=(git mercurial colored-man-pages colorize command-not-found fzf)
+# Check the READMEs in ~/.oh-my-zsh/plugins/
+plugins=(
+    git mercurial colored-man-pages colorize command-not-found
+    conda-zsh-completion pip sudo themes z copyfile dirhistory extract fzf
+    zsh-syntax-highlighting
+)
 
 # User configuration
 
@@ -66,7 +70,13 @@ setopt inc_append_history
 setopt share_history
 
 export FZF_DEFAULT_COMMAND='rg --files --hidden --glob "!.git/*" --glob "!sources/*" --glob "!vim/*" --glob "!tmux/*" --glob "!node_modules/*" --glob "!build/*" --glob "!dist/*"'
-export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+if (( $+commands[fd] )); then
+    export FZF_CTRL_T_COMMAND='fd --type d --hidden --exclude .git --exclude sources --exclude node_modules --exclude build --exclude dist'
+elif (( $+commands[fdfind] )); then
+    export FZF_CTRL_T_COMMAND='fdfind --type d --hidden --exclude .git --exclude sources --exclude node_modules --exclude build --exclude dist'
+else
+    export FZF_CTRL_T_COMMAND='find . -type d -not -path "*/.git/*" -not -path "*/sources/*" -not -path "*/node_modules/*" -not -path "*/build/*" -not -path "*/dist/*"'
+fi
 export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border'
 
 if [[ ! -r /usr/share/doc/fzf/examples/completion.zsh &&
@@ -94,7 +104,9 @@ export PATH="$PATH:$HOME/.cargo/bin"
 # fi
 
 export EDITOR='vim'
+export GIT_EDITOR="$EDITOR"
 export DIFF_TOOL='vimdiff'
+export GIT_DIFF_TOOL="$DIFF_TOOL"
 
 # Compilation flags
 # export ARCHFLAGS="-arch x86_64"
@@ -111,7 +123,19 @@ export DIFF_TOOL='vimdiff'
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 #
-alias vi="vim"
+alias grep='grep --color=always'
+alias vi='vim'
+alias sl='sl -e -a -F'
+alias minicom='minicom --wrap --color=on'
+
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+    source "$NVM_DIR/nvm.sh"
+    nvm use --silent default >/dev/null 2>&1
+fi
+if [ -s "$NVM_DIR/bash_completion" ]; then
+    source "$NVM_DIR/bash_completion"
+fi
 
 if [ -r "$HOME/.zshrc.local" ]; then
     source "$HOME/.zshrc.local"

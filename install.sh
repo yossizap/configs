@@ -8,6 +8,7 @@ TMUX_FROM_SOURCE="${TMUX_FROM_SOURCE:-true}"
 INSTALL_VIM_PLUGINS="${INSTALL_VIM_PLUGINS:-true}"
 INSTALL_ZSH="${INSTALL_ZSH:-true}"
 INSTALL_OH_MY_ZSH="${INSTALL_OH_MY_ZSH:-true}"
+INSTALL_NVM="${INSTALL_NVM:-true}"
 CHANGE_DEFAULT_SHELL="${CHANGE_DEFAULT_SHELL:-true}"
 INSTALL_EXTRA_TOOLS="${INSTALL_EXTRA_TOOLS:-true}"
 INSTALL_COMPLETION_TOOLS="${INSTALL_COMPLETION_TOOLS:-true}"
@@ -21,6 +22,7 @@ OFFLINE_MODE="${OFFLINE_MODE:-false}"
 
 VIM_REF="${VIM_REF:-v9.2.0782}"
 TMUX_REF="${TMUX_REF:-3.5a}"
+NVM_REF="${NVM_REF:-master}"
 NERD_FONT_NAME="${NERD_FONT_NAME:-JetBrainsMono}"
 NERD_FONT_FAMILY="${NERD_FONT_FAMILY:-JetBrainsMono Nerd Font Mono}"
 NERD_FONT_SIZE="${NERD_FONT_SIZE:-14}"
@@ -29,6 +31,9 @@ VIM_SRC_DIR="${VIM_SRC_DIR:-$SRC_ROOT/vim}"
 TMUX_SRC_DIR="${TMUX_SRC_DIR:-$SRC_ROOT/tmux}"
 NERD_FONT_SRC_DIR="${NERD_FONT_SRC_DIR:-$SRC_ROOT/nerd-fonts}"
 VIM_PLUG_SRC_DIR="${VIM_PLUG_SRC_DIR:-$SRC_ROOT/vim-plug}"
+NVM_SRC_DIR="${NVM_SRC_DIR:-$SRC_ROOT/nvm}"
+CONDA_ZSH_COMPLETION_SRC_DIR="${CONDA_ZSH_COMPLETION_SRC_DIR:-$SRC_ROOT/conda-zsh-completion}"
+ZSH_SYNTAX_HIGHLIGHTING_SRC_DIR="${ZSH_SYNTAX_HIGHLIGHTING_SRC_DIR:-$SRC_ROOT/zsh-syntax-highlighting}"
 VIM_PREFIX="${VIM_PREFIX:-/usr/local}"
 TMUX_PREFIX="${TMUX_PREFIX:-/usr/local}"
 VIM_CONFIG_DIR="${VIM_CONFIG_DIR:-$HOME/.vim}"
@@ -39,6 +44,7 @@ INSTALL_USER="${INSTALL_USER:-${SUDO_USER:-$(id -un)}}"
 CONDA_DIR="${CONDA_DIR:-$HOME/miniconda3}"
 CONDA_CHANNEL="${CONDA_CHANNEL:-https://repo.anaconda.com/pkgs/main}"
 MAMBA_CHANNEL="${MAMBA_CHANNEL:-conda-forge}"
+NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 
 if command -v sudo >/dev/null 2>&1 && [ "$(id -u)" -ne 0 ]; then
     SUDO=sudo
@@ -168,13 +174,14 @@ configure_wsl() {
 }
 
 apt_install() {
-    DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y --no-install-recommends "$@"
+    $SUDO env DEBIAN_FRONTEND=noninteractive \
+        apt-get install -y --no-install-recommends "$@"
 }
 
 update_apt_lists() {
     if $SUDO apt-get update; then
         echo "Upgrading installed packages..."
-        DEBIAN_FRONTEND=noninteractive $SUDO apt-get upgrade -y
+        $SUDO env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
         return
     fi
 
@@ -396,6 +403,47 @@ install_fzf() {
         echo "The fzf apt package is installed but its executable is unavailable." >&2
         exit 1
     fi
+}
+
+install_nvm() {
+    echo "Installing nvm $NVM_REF..."
+    clone_or_update https://github.com/nvm-sh/nvm.git "$NVM_SRC_DIR" "$NVM_REF"
+    mkdir -p "$NVM_DIR"
+    rsync -ah --exclude .git "$NVM_SRC_DIR/" "$NVM_DIR/"
+
+    export NVM_DIR
+    # shellcheck source=/dev/null
+    . "$NVM_DIR/nvm.sh"
+    if [ "$OFFLINE_MODE" = true ]; then
+        if ! nvm version default >/dev/null 2>&1; then
+            echo "Offline nvm installation requires a default Node version in $NVM_DIR." >&2
+            exit 1
+        fi
+    else
+        nvm install --lts
+        nvm alias default 'lts/*'
+    fi
+    nvm use --silent default
+}
+
+install_zsh_plugins() {
+    local custom_dir="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+
+    echo "Installing zsh plugins..."
+    clone_or_update https://github.com/esc/conda-zsh-completion.git \
+        "$CONDA_ZSH_COMPLETION_SRC_DIR" master
+    clone_or_update https://github.com/zsh-users/zsh-syntax-highlighting.git \
+        "$ZSH_SYNTAX_HIGHLIGHTING_SRC_DIR" master
+
+    mkdir -p \
+        "$custom_dir/plugins/conda-zsh-completion" \
+        "$custom_dir/plugins/zsh-syntax-highlighting"
+    rsync -ah --exclude .git \
+        "$CONDA_ZSH_COMPLETION_SRC_DIR/" \
+        "$custom_dir/plugins/conda-zsh-completion/"
+    rsync -ah --exclude .git \
+        "$ZSH_SYNTAX_HIGHLIGHTING_SRC_DIR/" \
+        "$custom_dir/plugins/zsh-syntax-highlighting/"
 }
 
 install_zuban() {
@@ -811,6 +859,7 @@ if should_run "$INSTALL_EXTRA_TOOLS" "Install extra command-line tools?" yes; th
         ranger \
         shellcheck \
         silversearcher-ag \
+        sl \
         tree
 fi
 
@@ -1055,6 +1104,11 @@ fi
 if command -v zsh >/dev/null 2>&1 && should_run "$INSTALL_OH_MY_ZSH" "Install or update oh-my-zsh?" yes; then
     echo "Installing oh-my-zsh..."
     clone_or_update https://github.com/ohmyzsh/ohmyzsh.git "$HOME/.oh-my-zsh" master
+    install_zsh_plugins
+fi
+
+if should_run "$INSTALL_NVM" "Install nvm and the latest Node LTS?" yes; then
+    install_nvm
 fi
 
 if command -v zsh >/dev/null 2>&1 && should_run "$CHANGE_DEFAULT_SHELL" "Make zsh the default login shell?" yes; then

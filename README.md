@@ -23,6 +23,10 @@ Run `select-config` to select terminal fonts and zsh, Vim, or tmux themes. Use L
 
 Optional machine-specific settings can be added to `~/.zshrc.local` and `~/.vimrc.local`. They are loaded after the repository configuration and are not overwritten by the installer.
 
+In zsh, `Ctrl+t` uses fzf to insert a directory.
+
+The installer tracks nvm's `master` branch in `sources/nvm`, installs the latest Node LTS, and makes it the default in new zsh sessions. Set `NVM_NODEJS_ORG_MIRROR` when Node releases must come from an internal mirror.
+
 # Vim Configuration
 
 This configuration uses [vim-plug](https://github.com/junegunn/vim-plug) as the plugin manager. To install plugins, use:
