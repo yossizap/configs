@@ -129,6 +129,22 @@ Projects opt in by placing `.vim-project.json` at their root. Run `configure-vim
 - Popular colorschemes are managed through vim-plug; run `:PlugInstall` if they are not listed.
 - The picker uses a curses UI. Use `/` to search, `p` to preview, `Right` or `Enter` to save, and `i` to run `PlugInstall --sync` when curated themes are missing.
 
+# WSL Configuration
+
+- `install.sh` enables systemd and OpenSSH inside WSL. SSH, SCP, and rsync-over-SSH become available after restarting WSL.
+- Windows drives use DrvFS metadata and per-directory case sensitivity. `%USERPROFILE%\workspace` is available as `~/windows-workspace`.
+- Run `windows/setup-wsl-usbip.ps1` from elevated PowerShell to install or update WSL, enable mirrored networking and Windows DNS/proxy integration, allow inbound SSH on port 22, and configure USB/IP.
+- Mirrored networking requires Windows 11 22H2 or newer. Restart WSL once with `wsl --shutdown` after configuration changes.
+- Linux builds are faster under the WSL filesystem. Use `~/windows-workspace` only when the repository must live on the Windows filesystem.
+- `-InstallDockerDesktop` installs Docker Desktop and makes the selected distro the default. Confirm its integration in Docker Desktop settings.
+- Git for Windows and Credential Manager integration are configured by default.
+- A Windows Ed25519 key is created or reused, authorized in WSL, and SSH password authentication is disabled by default.
+- Windows elevation uses native `sudo.exe` inline on Windows 11 24H2 or newer. Windows 10 and older Windows 11 releases use `gsudo.exe` in the current terminal.
+- `-WslMemory 8GB -WslProcessors 4 -WslSwap 4GB` sets optional WSL resource limits.
+- Windows commands can be launched directly from WSL, for example `explorer.exe .`, `notepad.exe file.txt`, or `powershell.exe -NoProfile -Command Get-Date`.
+- Linux `sudo` only elevates Linux processes. Elevate a Windows process with `sudo.exe <command>` on Windows 11 24H2 or `gsudo.exe <command>` on earlier releases.
+- Imported distributions, including a Yocto root filesystem, can launch Windows executables when WSL interop, Windows PATH appending, and drive mounting are enabled. Git integration also requires Git in the distribution; SSH setup requires a POSIX shell and OpenSSH server. The Ubuntu `install.sh` package setup does not apply to Yocto images.
+
 # Tmux Configuration
 
 ## Important Tmux Options
