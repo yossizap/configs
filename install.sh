@@ -848,7 +848,7 @@ if should_run "$CONFIGURE_TERMINAL_FONT" "Set GNOME Terminal to $NERD_FONT_FAMIL
 fi
 
 if should_run "$INSTALL_ZSH" "Install zsh and zsh helper packages?" yes; then
-    apt_install zsh cowsay fortune-mod
+    apt_install zsh cowsay fortune-mod fortunes
 fi
 
 if [ "$VIM_FROM_SOURCE" = true ]; then

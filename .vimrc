@@ -345,6 +345,93 @@ function! s:TmuxNavigateVertical(direction) abort
     endif
 endfunction
 
+function! s:TmuxSelectPane(direction) abort
+    if empty($TMUX) || empty($TMUX_PANE)
+        return
+    endif
+
+    let l:socket = split($TMUX, ',')[0]
+    call system(
+                \ 'tmux -S ' . shellescape(l:socket)
+                \ . ' select-pane -t ' . shellescape($TMUX_PANE)
+                \ . ' -' . a:direction)
+    if &buftype ==# 'terminal'
+        normal! i
+    endif
+endfunction
+
+function! s:OpenScrollback() abort
+    if &buftype ==# 'terminal' || empty($TMUX) || empty($TMUX_PANE)
+        return
+    endif
+
+    let l:socket = split($TMUX, ',')[0]
+    call system(
+                \ 'tmux -S ' . shellescape(l:socket)
+                \ . ' copy-mode -t ' . shellescape($TMUX_PANE))
+endfunction
+
+function! s:TerminalYank() abort
+    normal! gvy
+    if !empty($TMUX) && executable('tmux')
+        call system('tmux load-buffer -', getreg('"'))
+    endif
+endfunction
+
+function! s:SetupTerminalMappings() abort
+    nnoremap <buffer><silent> <Esc> i
+    nnoremap <buffer><silent> <C-c> i
+    xnoremap <buffer><silent> y :<C-U>call <SID>TerminalYank()<CR>i
+
+    nnoremap <buffer><silent> <M-h> :<C-U>call <SID>TmuxSelectPane('L')<CR>
+    nnoremap <buffer><silent> <M-j> :<C-U>call <SID>TmuxSelectPane('D')<CR>
+    nnoremap <buffer><silent> <M-k> :<C-U>call <SID>TmuxSelectPane('U')<CR>
+    nnoremap <buffer><silent> <M-l> :<C-U>call <SID>TmuxSelectPane('R')<CR>
+    nnoremap <buffer><silent> <Esc>h :<C-U>call <SID>TmuxSelectPane('L')<CR>
+    nnoremap <buffer><silent> <Esc>j :<C-U>call <SID>TmuxSelectPane('D')<CR>
+    nnoremap <buffer><silent> <Esc>k :<C-U>call <SID>TmuxSelectPane('U')<CR>
+    nnoremap <buffer><silent> <Esc>l :<C-U>call <SID>TmuxSelectPane('R')<CR>
+    nnoremap <buffer><silent> <A-Left> :<C-U>call <SID>TmuxSelectPane('L')<CR>
+    nnoremap <buffer><silent> <A-Down> :<C-U>call <SID>TmuxSelectPane('D')<CR>
+    nnoremap <buffer><silent> <A-Up> :<C-U>call <SID>TmuxSelectPane('U')<CR>
+    nnoremap <buffer><silent> <A-Right> :<C-U>call <SID>TmuxSelectPane('R')<CR>
+    execute "nnoremap <buffer><silent> \e[1;3B :<C-U>call <SID>TmuxSelectPane('D')<CR>"
+    execute "nnoremap <buffer><silent> \e[1;3A :<C-U>call <SID>TmuxSelectPane('U')<CR>"
+    execute "nnoremap <buffer><silent> \e[1;3D :<C-U>call <SID>TmuxSelectPane('L')<CR>"
+    execute "nnoremap <buffer><silent> \e[1;3C :<C-U>call <SID>TmuxSelectPane('R')<CR>"
+    tnoremap <buffer><silent> <M-h> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('L')<CR>
+    tnoremap <buffer><silent> <M-j> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('D')<CR>
+    tnoremap <buffer><silent> <M-k> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('U')<CR>
+    tnoremap <buffer><silent> <M-l> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('R')<CR>
+    tnoremap <buffer><silent> <Esc>h <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('L')<CR>
+    tnoremap <buffer><silent> <Esc>j <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('D')<CR>
+    tnoremap <buffer><silent> <Esc>k <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('U')<CR>
+    tnoremap <buffer><silent> <Esc>l <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('R')<CR>
+    tnoremap <buffer><silent> <A-Left> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('L')<CR>
+    tnoremap <buffer><silent> <A-Down> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('D')<CR>
+    tnoremap <buffer><silent> <A-Up> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('U')<CR>
+    tnoremap <buffer><silent> <A-Right> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('R')<CR>
+    tnoremap <buffer><silent> <F11> <C-\><C-n>3<C-y>
+    tnoremap <buffer><silent> <F10> <C-\><C-n>3<C-e>
+endfunction
+
+augroup configs_terminal_mappings
+    autocmd!
+    autocmd BufEnter,BufWinEnter,WinEnter *
+                \ if &buftype ==# 'terminal' |
+                \ call <SID>SetupTerminalMappings() |
+                \ endif
+    if exists('##TerminalOpen')
+        autocmd TerminalOpen * call <SID>SetupTerminalMappings()
+    endif
+    if exists('##TermOpen')
+        autocmd TermOpen * call <SID>SetupTerminalMappings()
+    endif
+    if exists('##TermEnter')
+        autocmd TermEnter * call <SID>SetupTerminalMappings()
+    endif
+augroup END
+
 for s:key in ['<C-h>', '<C-j>', '<C-k>', '<C-l>']
     if !empty(maparg(s:key, 'n'))
         execute 'nunmap ' . s:key
@@ -355,6 +442,14 @@ for s:key in ['<C-h>', '<C-j>', '<C-k>', '<C-l>']
 endfor
 unlet s:key
 
+nnoremap <silent> <F12> :<C-U>call <SID>OpenScrollback()<CR>
+inoremap <silent> <F12> <C-O>:call <SID>OpenScrollback()<CR>
+xnoremap <silent> <F12> <Esc>:call <SID>OpenScrollback()<CR>
+tnoremap <silent> <F12> <C-\><C-n>
+nnoremap <silent> <F11> 3<C-y>
+nnoremap <silent> <F10> 3<C-e>
+tnoremap <silent> <F11> <C-\><C-n>3<C-y>
+tnoremap <silent> <F10> <C-\><C-n>3<C-e>
 nnoremap <silent> <M-h> :<C-U>TmuxNavigateLeft<cr>
 nnoremap <silent> <M-j> :<C-U>call <SID>TmuxNavigateVertical('j')<cr>
 nnoremap <silent> <M-k> :<C-U>call <SID>TmuxNavigateVertical('k')<cr>
@@ -376,14 +471,16 @@ execute "nnoremap <silent> \e[1;3B :<C-U>call <SID>TmuxNavigateVertical('j')<cr>
 execute "nnoremap <silent> \e[1;3A :<C-U>call <SID>TmuxNavigateVertical('k')<cr>"
 execute "nnoremap <silent> \e[1;3D :<C-U>TmuxNavigateLeft<cr>"
 execute "nnoremap <silent> \e[1;3C :<C-U>TmuxNavigateRight<cr>"
-tnoremap <silent> <M-h> <C-\><C-n>:<C-U>TmuxNavigateLeft<cr>
-tnoremap <silent> <M-j> <C-\><C-n>:<C-U>call <SID>TmuxNavigateVertical('j')<cr>
-tnoremap <silent> <M-k> <C-\><C-n>:<C-U>call <SID>TmuxNavigateVertical('k')<cr>
-tnoremap <silent> <M-l> <C-\><C-n>:<C-U>TmuxNavigateRight<cr>
-tnoremap <silent> <A-Left> <C-\><C-n>:<C-U>TmuxNavigateLeft<cr>
-tnoremap <silent> <A-Down> <C-\><C-n>:<C-U>call <SID>TmuxNavigateVertical('j')<cr>
-tnoremap <silent> <A-Up> <C-\><C-n>:<C-U>call <SID>TmuxNavigateVertical('k')<cr>
-tnoremap <silent> <A-Right> <C-\><C-n>:<C-U>TmuxNavigateRight<cr>
+tnoremap <silent> <M-h> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('L')<cr>
+tnoremap <silent> <M-j> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('D')<cr>
+tnoremap <silent> <M-k> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('U')<cr>
+tnoremap <silent> <M-l> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('R')<cr>
+tnoremap <silent> <A-Left> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('L')<cr>
+tnoremap <silent> <A-Down> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('D')<cr>
+tnoremap <silent> <A-Up> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('U')<cr>
+tnoremap <silent> <A-Right> <C-\><C-n>:<C-U>call <SID>TmuxSelectPane('R')<cr>
+tnoremap <silent> <ScrollWheelUp> <C-\><C-n>3<C-y>
+tnoremap <silent> <ScrollWheelDown> <C-\><C-n>3<C-e>
 
 " Toggle spell check
 nnoremap <F8> :setlocal spell! spelllang=en_us<CR>

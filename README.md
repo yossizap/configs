@@ -49,6 +49,10 @@ This configuration uses [vim-plug](https://github.com/junegunn/vim-plug) as the 
 
 ### Terminal Management
 - `<C-t>` – Toggle floating terminal window (requires vim-floaterm plugin)
+- `Ctrl+b [` – Open tmux copy mode from a regular Vim buffer or Terminal-Normal mode from a Vim terminal
+- `Esc` / `Ctrl+c` – Return from Terminal-Normal mode to terminal input
+- `v`, then `y` – Select terminal history, copy it to the tmux buffer, and return to terminal input
+- Mouse wheel – Scroll Vim terminal history in either direction
 
 ## Plugin-Specific Shortcuts
 
@@ -190,7 +194,7 @@ Projects opt in by placing `.vim-project.json` at their root. Run `configure-vim
   - `r`: Reload the Tmux configuration file.
 
 - **Copy Mode**:
-  - `Prefix + [`: Start copy mode.
+  - `Prefix + [`: Start tmux copy mode, or Vim Terminal-Normal mode when a Vim terminal owns the scrollback.
   - `v`: Begin selection in copy mode.
   - `y`: Copy the selected text and exit copy mode.
   - `Prefix + ]`: Paste from copy mode clipboard

@@ -116,3 +116,9 @@ alias vi="vim"
 if [ -r "$HOME/.zshrc.local" ]; then
     source "$HOME/.zshrc.local"
 fi
+
+if [[ -o interactive ]] &&
+    command -v fortune >/dev/null 2>&1 &&
+    command -v cowsay >/dev/null 2>&1; then
+    fortune | cowsay
+fi
