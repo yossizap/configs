@@ -130,21 +130,14 @@ function! configs_project#lsp_buffer() abort
     endif
 endfunction
 
-function! configs_project#try_ultisnips() abort
-    let g:ulti_expand_or_jump_res = 0
-    if !pumvisible() && exists('*UltiSnips#ExpandSnippetOrJump')
-        call UltiSnips#ExpandSnippetOrJump()
-    endif
-    return ''
-endfunction
-
 function! configs_project#tab() abort
-    if get(g:, 'ulti_expand_or_jump_res', 0)
-        return ''
+    let l:column = col('.') - 1
+    if !get(b:, 'configs_completion_enabled', 0)
+                \ || l:column == 0
+                \ || getline('.')[l:column - 1] =~# '\s'
+        return "\<Tab>"
     endif
-    return get(b:, 'configs_completion_enabled', 0)
-                \ ? "\<Plug>(MUcompleteFwd)"
-                \ : "\<Tab>"
+    return "\<Plug>(MUcompleteFwd)"
 endfunction
 
 function! configs_project#shift_tab() abort
@@ -191,11 +184,8 @@ endfunction
 
 function! configs_project#setup() abort
     call mkdir(g:gutentags_cache_dir, 'p')
-    let g:UltiSnipsExpandTrigger = '<F5>'
 
-    inoremap <silent> <Plug>(ConfigsTryUlti) <C-R>=configs_project#try_ultisnips()<CR>
-    imap <expr> <silent> <Plug>(ConfigsComplete) configs_project#tab()
-    imap <expr> <silent> <Tab> "\<Plug>(ConfigsTryUlti)\<Plug>(ConfigsComplete)"
+    imap <expr> <silent> <Tab> configs_project#tab()
     imap <expr> <silent> <S-Tab> configs_project#shift_tab()
     imap <expr> <silent> <CR> configs_project#enter()
 

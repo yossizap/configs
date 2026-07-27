@@ -1005,10 +1005,6 @@ if [ "$VIM_FROM_SOURCE" = true ]; then
         echo "Vim was not installed at $vim_bin" >&2
         exit 1
     fi
-    if ! "$vim_bin" --version | grep -q '+python3'; then
-        echo "Vim was built without +python3; UltiSnips requires Python 3 support." >&2
-        exit 1
-    fi
 else
     echo "Installing Vim from apt..."
     apt_install vim

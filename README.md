@@ -47,6 +47,7 @@ This configuration uses [vim-plug](https://github.com/junegunn/vim-plug) as the 
 - `\cs` and `\c<space>` – Comments and uncomments selected code (requires NERD Commenter plugin)
 
 ### Pane and Window Management
+- `<F4>` – Toggle NERDTree
 - `<F3>` – Toggle Tagbar (provides a file structure view)
 - `<A-h>`, `<A-j>`, `<A-k>`, `<A-l>` – Switch between Vim splits and tmux panes
 - `<A-Left>`, `<A-Down>`, `<A-Up>`, `<A-Right>` – Arrow-key equivalents for Vim/tmux pane navigation
@@ -63,10 +64,6 @@ This configuration uses [vim-plug](https://github.com/junegunn/vim-plug) as the 
 ### EasyMotion
 - `<Leader>h`, `<Leader>j`, `<Leader>k`, `<Leader>l` – EasyMotion mappings for linewise navigation
 - `<Leader><Leader>` – EasyMotion prefix key for jump navigation
-
-### UltiSnips
-- `<C-j> / <C-k>` – Navigate forward/backward within a snippet
-- `:UltiSnipsEdit` – Open snippet editor
 
 ### FZF
 - `<C-p>` – Open FZF file navigator
@@ -90,7 +87,7 @@ This configuration uses [vim-plug](https://github.com/junegunn/vim-plug) as the 
 
 Projects opt in by placing `.vim-project.json` at their root. Run `configure-vim-project` there to generate a profile. Python completion, signatures, and diagnostics use Zuban through vim-lsp. C and C++ use clangd through ALE when a compilation database is configured, and Gutentags provides tag completion.
 
-- `Tab` / `Shift+Tab` – Complete forward/backward; snippets take priority
+- `Tab` / `Shift+Tab` – Complete forward/backward; Tab indents after whitespace
 - `:ProjectInfo` – Show the active project profile
 - `:ProjectCompletionToggle` – Toggle completion for the current buffer
 - `:GutentagsToggleEnabled` – Toggle tag generation

@@ -4,6 +4,8 @@ if !empty(glob('~/.vim/autoload/plug.vim'))
 call plug#begin('~/.vim/plugged')
 " Use explicit Alt-* mappings instead of vim-tmux-navigator's default Ctrl-* mappings.
 let g:tmux_navigator_no_mappings = 1
+" File tree viewer
+Plug 'preservim/nerdtree'
 " Comment functions - \cs and \c<space>
 Plug 'preservim/nerdcommenter'
 " Delete/change/add parentheses/quotes/XML-tags/much more with ease - cs'"
@@ -12,13 +14,6 @@ Plug 'tpope/vim-surround'
 Plug 'tpope/vim-eunuch'
 " Vimium like navigation
 Plug 'easymotion/vim-easymotion'
-" Improved snipmate. <c-j> <c-k> to move backwards/forwards in snippet fields.
-" :UltiSnipsEdit for an editable list of snippets
-if has('python3')
-Plug 'sirver/ultisnips', { 'tag': '3.2' }
-endif
-" " Snippets are separated from the engine
-Plug 'honza/vim-snippets'
 " Integration with tmux navigation shortcuts
 Plug 'christoomey/vim-tmux-navigator'
 " Verilog/SystemVerilog Syntax and Omni-completion
@@ -231,9 +226,6 @@ nnoremap g# g#zz
 " the same indent as the line you're currently on.
 set autoindent
 
-" Do smart autoindenting when starting a new line.
-set smartindent
-
 " Highlight matching bracket
 "set showmatch
 "set matchtime=3
@@ -309,6 +301,9 @@ set autowrite
 " Map Y to act like D and C, i.e. to yank until EOL, rather than act as yy,
 " which is the default
 nnoremap Y y$
+
+" Open NERDTree
+nnoremap <F4> <esc>:NERDTreeToggle<cr>
 
 " Open Tagbar
 nnoremap <F3> <esc>:Tagbar<cr>
@@ -667,15 +662,9 @@ let g:EasyMotion_smartcase = 1
 " Disable context plugin, use manually when lost
 let g:context_enabled = 0
 
-" UltiSnip settings
-if has('python3')
-" Trigger configuration
-let g:UltiSnipsExpandTrigger="<tab>"
-let g:UltiSnipsJumpForwardTrigger="<c-j>"
-let g:UltiSnipsJumpBackwardTrigger="<c-k>"
-" If you want :UltiSnipsEdit to split your window.
-let g:UltiSnipsEditSplit="vertical"
-endif
+" Do not remap J/K to sibling jumps in the NERDTree window.
+let g:NERDTreeMapJumpPrevSibling = ''
+let g:NERDTreeMapJumpNextSibling = ''
 
 " Lightlime settings
 " Color name (:help cterm-colors) or ANSI code
