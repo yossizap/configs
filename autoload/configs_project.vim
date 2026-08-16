@@ -147,12 +147,28 @@ function! configs_project#shift_tab() abort
 endfunction
 
 function! configs_project#enter() abort
-    if !pumvisible()
-        return "\<CR>"
+    if pumvisible()
+        return complete_info(['selected']).selected < 0
+                    \ ? "\<C-N>\<C-Y>"
+                    \ : "\<C-Y>"
     endif
-    return complete_info(['selected']).selected < 0
-                \ ? "\<C-N>\<C-Y>"
-                \ : "\<C-Y>"
+    if &filetype ==# 'python'
+                \ && strpart(getline('.'), 0, col('.') - 1) =~# '"""$'
+                \ && strpart(getline('.'), col('.') - 1) =~# '^"""'
+        return "\<CR>\<CR>\<Up>" . repeat(' ', indent('.'))
+    endif
+    return "\<CR>"
+endfunction
+
+function! configs_project#python_quote() abort
+    if strpart(getline('.'), 0, col('.') - 1) =~# '""$'
+        return '""""' . "\<Left>\<Left>\<Left>"
+    endif
+    return '"'
+endfunction
+
+function! configs_project#python_mappings() abort
+    inoremap <buffer> <silent> <expr> <Char-34> configs_project#python_quote()
 endfunction
 
 function! configs_project#toggle_completion() abort
@@ -195,7 +211,12 @@ function! configs_project#setup() abort
     augroup configs_project
         autocmd!
         autocmd BufReadPost,BufNewFile,FileType * call configs_project#apply()
+        autocmd FileType python call configs_project#python_mappings()
         autocmd User lsp_setup call configs_project#register_lsp()
         autocmd User lsp_buffer_enabled call configs_project#lsp_buffer()
     augroup END
+
+    if &filetype ==# 'python'
+        call configs_project#python_mappings()
+    endif
 endfunction

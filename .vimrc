@@ -97,6 +97,13 @@ endif
 " have made, as well as sanely reset options when re-sourcing .vimrc
 set nocompatible
 
+" Indent Python continuations one level after an opening parenthesis.
+let g:pyindent_open_paren = 'shiftwidth()'
+let g:python_indent = {
+            \ 'open_paren': g:pyindent_open_paren,
+            \ 'closed_paren_align_last_line': v:false,
+            \ }
+
 " Attempt to determine the type of a file based on its name and possibly its
 " contents. Use this to allow intelligent auto-indenting for each filetype,
 " and for plugins that are filetype specific.
@@ -246,9 +253,8 @@ set softtabstop=4
 " c0 - indent comment to the start of the opener
 " U1 - do not ignore the indenting specified by { or u
 " ks - indent after for/while/if
-" (0 - When in unclosed parentheses, indent N characters from the line with the
-"      unclosed parentheses
-autocmd FileType c,cpp,objc,objcpp,verilog,systemverilog setlocal cindent cinoptions=b1,c0,U1,ks cinkeys+=*;
+" (s,m1 - indent one level inside parentheses and align the closer with the opener's line
+autocmd FileType c,cpp,objc,objcpp,verilog,systemverilog setlocal cindent cinoptions=b1,c0,U1,ks,(s,m1 cinkeys+=*;
 
 " Disable text wrap
 set nowrap
