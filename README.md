@@ -29,7 +29,7 @@ The installer runs the repository's empty `user-install.sh` hook after the stand
 
 Nerd Font installation and terminal font configuration are optional prompts. For unattended runs, set `INSTALL_NERD_FONT=true` and/or `CONFIGURE_TERMINAL_FONT=true` explicitly; set either variable to `false` to skip it.
 
-The installer uses the current fzf GitHub release artifact rather than the older Ubuntu package. It installs the binary under `~/.local/bin` and enables the native `fzf --zsh` and `fzf --bash` integrations. In zsh, `Ctrl+t` uses fzf to insert a directory.
+The installer uses the pinned fzf 0.74.1 GitHub release artifact rather than the older Ubuntu package. Override it with `FZF_VERSION`. It installs the binary under `~/.local/bin` and enables the native `fzf --zsh` and `fzf --bash` integrations. In zsh, `Ctrl+t` uses fzf to insert a directory.
 
 The installer tracks nvm's `master` branch in `sources/nvm`, installs the latest Node LTS, and makes it the default in new zsh sessions. Set `NVM_NODEJS_ORG_MIRROR` when Node releases must come from an internal mirror.
 

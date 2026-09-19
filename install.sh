@@ -23,6 +23,7 @@ OFFLINE_MODE="${OFFLINE_MODE:-false}"
 VIM_REF="${VIM_REF:-v9.2.0782}"
 TMUX_REF="${TMUX_REF:-3.5a}"
 NVM_REF="${NVM_REF:-master}"
+FZF_VERSION="${FZF_VERSION:-0.74.1}"
 NERD_FONT_NAME="${NERD_FONT_NAME:-JetBrainsMono}"
 NERD_FONT_FAMILY="${NERD_FONT_FAMILY:-JetBrainsMono Nerd Font Mono}"
 NERD_FONT_SIZE="${NERD_FONT_SIZE:-14}"
@@ -425,8 +426,7 @@ install_fzf() {
             echo "Offline fzf installation requires fzf-*-linux_${artifact_arch}.tar.gz in sources/" >&2
             exit 1
         fi
-        download_url="$(curl -fsSL https://api.github.com/repos/junegunn/fzf/releases/latest |
-            python3 -c 'import json, sys; print(next(asset["browser_download_url"] for asset in json.load(sys.stdin)["assets"] if asset["name"].endswith("linux_" + sys.argv[1] + ".tar.gz")))' "$artifact_arch")"
+        download_url="https://github.com/junegunn/fzf/releases/download/v${FZF_VERSION}/fzf-${FZF_VERSION}-linux_${artifact_arch}.tar.gz"
         artifact="$tmp_dir/fzf.tar.gz"
         curl -fL "$download_url" -o "$artifact"
     fi
