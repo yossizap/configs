@@ -19,11 +19,15 @@
 ---
 This repository contains Vim, tmux, zsh, and fzf configuration. Run `install.sh` to install the configuration and its dependencies.
 
+The supported Ubuntu releases are the LTS versions under standard Canonical maintenance: 22.04, 24.04, and 26.04. A Docker smoke test runs the installer on each release in GitHub Actions.
+
 Run `select-config` to select terminal fonts and zsh, Vim, or tmux themes. Use Left to go back, Right or Enter to select, and `p` to preview.
 
 Optional machine-specific settings can be added to `~/.zshrc.local` and `~/.vimrc.local`. They are loaded after the repository configuration and are not overwritten by the installer.
 
-In zsh, `Ctrl+t` uses fzf to insert a directory.
+Nerd Font installation and terminal font configuration are optional prompts. For unattended runs, set `INSTALL_NERD_FONT=true` and/or `CONFIGURE_TERMINAL_FONT=true` explicitly; set either variable to `false` to skip it.
+
+The installer uses the current fzf GitHub release artifact rather than the older Ubuntu package. It installs the binary under `~/.local/bin` and enables the native `fzf --zsh` and `fzf --bash` integrations. In zsh, `Ctrl+t` uses fzf to insert a directory.
 
 The installer tracks nvm's `master` branch in `sources/nvm`, installs the latest Node LTS, and makes it the default in new zsh sessions. Set `NVM_NODEJS_ORG_MIRROR` when Node releases must come from an internal mirror.
 
@@ -86,6 +90,10 @@ This configuration uses [vim-plug](https://github.com/junegunn/vim-plug) as the 
 ## Project Completion
 
 Projects opt in by placing `.vim-project.json` at their root. Run `configure-vim-project` there to generate a profile. Python completion, signatures, and diagnostics use Zuban through vim-lsp. C and C++ use clangd through ALE when a compilation database is configured, and Gutentags provides tag completion.
+
+JSON and JSONC files use `vscode-json-language-server`, the language server behind VS Code's built-in JSON support. It provides completion, precise syntax diagnostics, and JSON Schema validation without requiring an editor-specific schema plugin. Errors and warnings appear as signs and are echoed with their full message when the cursor rests on the affected location. Add a `$schema` property containing a schema URL or local path to validate a document against a specific schema; use `:LspDocumentDiagnostics` to list every diagnostic in the current document.
+
+The optional command-line tools include `bat`, a syntax-highlighting `cat` alternative. On Ubuntu the executable is named `batcat`; the shell configuration also exposes it as `bat`.
 
 - `Tab` / `Shift+Tab` – Complete forward/backward; Tab indents after whitespace
 - `:ProjectInfo` – Show the active project profile

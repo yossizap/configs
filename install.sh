@@ -14,10 +14,10 @@ INSTALL_EXTRA_TOOLS="${INSTALL_EXTRA_TOOLS:-true}"
 INSTALL_COMPLETION_TOOLS="${INSTALL_COMPLETION_TOOLS:-true}"
 INSTALL_DOCKER="${INSTALL_DOCKER:-prompt}"
 INSTALL_CONDA="${INSTALL_CONDA:-prompt}"
-INSTALL_MAMBA="${INSTALL_MAMBA:-false}"
-INSTALL_NERD_FONT="${INSTALL_NERD_FONT:-true}"
+INSTALL_MAMBA="${INSTALL_MAMBA:-true}"
+INSTALL_NERD_FONT="${INSTALL_NERD_FONT:-prompt}"
 NERD_FONT_REFRESH="${NERD_FONT_REFRESH:-false}"
-CONFIGURE_TERMINAL_FONT="${CONFIGURE_TERMINAL_FONT:-true}"
+CONFIGURE_TERMINAL_FONT="${CONFIGURE_TERMINAL_FONT:-prompt}"
 OFFLINE_MODE="${OFFLINE_MODE:-false}"
 
 VIM_REF="${VIM_REF:-v9.2.0782}"
@@ -398,11 +398,43 @@ clone_or_update() {
 }
 
 install_fzf() {
-    echo "Installing fzf..."
-    if ! command -v fzf >/dev/null 2>&1; then
-        echo "The fzf apt package is installed but its executable is unavailable." >&2
-        exit 1
+    local artifact
+    local artifact_arch
+    local download_url
+    local tmp_dir
+
+    case "$(uname -m)" in
+        x86_64) artifact_arch=amd64 ;;
+        aarch64 | arm64) artifact_arch=arm64 ;;
+        *)
+            echo "fzf is not supported on architecture $(uname -m)" >&2
+            exit 1
+            ;;
+    esac
+
+    if [ -x "$HOME/.local/bin/fzf" ]; then
+        echo "fzf artifact already installed"
+        return
     fi
+
+    echo "Installing fzf release artifact..."
+    artifact="$(find_source_file "fzf-*-linux_${artifact_arch}.tar.gz" || true)"
+    tmp_dir="$(mktemp -d)"
+    if [ -z "$artifact" ]; then
+        if [ "$OFFLINE_MODE" = true ]; then
+            echo "Offline fzf installation requires fzf-*-linux_${artifact_arch}.tar.gz in sources/" >&2
+            exit 1
+        fi
+        download_url="$(curl -fsSL https://api.github.com/repos/junegunn/fzf/releases/latest |
+            python3 -c 'import json, sys; print(next(asset["browser_download_url"] for asset in json.load(sys.stdin)["assets"] if asset["name"].endswith("linux_" + sys.argv[1] + ".tar.gz")))' "$artifact_arch")"
+        artifact="$tmp_dir/fzf.tar.gz"
+        curl -fL "$download_url" -o "$artifact"
+    fi
+
+    tar -xzf "$artifact" -C "$tmp_dir"
+    mkdir -p "$HOME/.local/bin"
+    install -m 0755 "$tmp_dir/fzf" "$HOME/.local/bin/fzf"
+    rm -rf "$tmp_dir"
 }
 
 install_nvm() {
@@ -466,6 +498,22 @@ install_zuban() {
         python3 -m pip install "${pip_args[@]}" --no-index "$wheel"
     else
         python3 -m pip install "${pip_args[@]}" zuban
+    fi
+}
+
+install_json_language_server() {
+    if command -v vscode-json-language-server >/dev/null 2>&1; then
+        echo "JSON language server already installed"
+        return
+    fi
+    if ! command -v npm >/dev/null 2>&1; then
+        echo "npm is required to install the JSON language server" >&2
+        exit 1
+    fi
+    if [ "$OFFLINE_MODE" = true ]; then
+        npm install --global --offline vscode-langservers-extracted
+    else
+        npm install --global vscode-langservers-extracted
     fi
 }
 
@@ -851,6 +899,7 @@ configure_wsl
 if should_run "$INSTALL_EXTRA_TOOLS" "Install extra command-line tools?" yes; then
     echo "Installing extra command-line tools..."
     apt_install_available \
+        bat \
         htop \
         jq \
         lsof \
@@ -1006,8 +1055,8 @@ if [ "$VIM_FROM_SOURCE" = true ]; then
         exit 1
     fi
 else
-    echo "Installing Vim from apt..."
-    apt_install vim
+    echo "Installing Vim with language support from apt..."
+    apt_install vim-nox
     vim_bin="$(command -v vim)"
 fi
 
@@ -1105,6 +1154,10 @@ fi
 
 if should_run "$INSTALL_NVM" "Install nvm and the latest Node LTS?" yes; then
     install_nvm
+fi
+
+if should_run "$INSTALL_COMPLETION_TOOLS" "Install completion and language-server tools?" yes; then
+    install_json_language_server
 fi
 
 if command -v zsh >/dev/null 2>&1 && should_run "$CHANGE_DEFAULT_SHELL" "Make zsh the default login shell?" yes; then

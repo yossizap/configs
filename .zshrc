@@ -1,5 +1,6 @@
 # Path to your oh-my-zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
+export PATH="$HOME/.local/bin:$PATH"
 
 # Set name of the theme to load.
 # Look in ~/.oh-my-zsh/themes/
@@ -48,7 +49,7 @@ ZSH_THEME="gentoo"
 # Check the READMEs in ~/.oh-my-zsh/plugins/
 plugins=(
     git mercurial colored-man-pages colorize command-not-found
-    conda-zsh-completion pip sudo themes z copyfile dirhistory extract fzf
+    conda-zsh-completion pip sudo themes z copyfile dirhistory extract
     zsh-syntax-highlighting
 )
 
@@ -79,18 +80,15 @@ else
 fi
 export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border'
 
-if [[ ! -r /usr/share/doc/fzf/examples/completion.zsh &&
-      ! -r /usr/share/zsh/vendor-completions/_fzf ]]; then
-    DISABLE_FZF_AUTO_COMPLETION=true
-fi
-if [[ ! -r /usr/share/doc/fzf/examples/key-bindings.zsh ]]; then
-    DISABLE_FZF_KEY_BINDINGS=true
-fi
-
 if [ -f "$ZSH/oh-my-zsh.sh" ]; then
     source "$ZSH/oh-my-zsh.sh"
 fi
 
+if command -v fzf >/dev/null 2>&1; then
+    eval "$(fzf --zsh)"
+fi
+
+export LESS='-Ri'
 export PATH="$PATH:$HOME/.cargo/bin"
 
 # You may need to manually set your language environment
@@ -127,6 +125,9 @@ alias grep='grep --color=always'
 alias vi='vim'
 alias sl='sl -e -a -F'
 alias minicom='minicom --wrap --color=on'
+if (( ! $+commands[bat] && $+commands[batcat] )); then
+    alias bat='batcat'
+fi
 
 export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 if [ -s "$NVM_DIR/nvm.sh" ]; then

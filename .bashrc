@@ -1,6 +1,7 @@
 # ~/.bashrc: executed by bash(1) for non-login shells.
 # see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)
 # for examples
+export PATH="$HOME/.local/bin:$PATH"
 
 # If not running interactively, don't do anything
 case $- in
@@ -32,6 +33,7 @@ shopt -s checkwinsize
 
 # make less more friendly for non-text input files, see lesspipe(1)
 [ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
+export LESS='-Ri'
 
 # set variable identifying the chroot you work in (used in the prompt below)
 if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
@@ -124,10 +126,11 @@ bind '"\e[B": history-search-forward'
 
 export EDITOR='vim'
 
+# Debian and Ubuntu install bat as batcat to avoid a package-name collision.
+if ! command -v bat >/dev/null 2>&1 && command -v batcat >/dev/null 2>&1; then
+    alias bat='batcat'
+fi
+
 if command -v fzf >/dev/null 2>&1; then
-    [ -r /usr/share/bash-completion/completions/fzf ] &&
-        source /usr/share/bash-completion/completions/fzf
-    [ -r /usr/share/doc/fzf/examples/key-bindings.bash ] &&
-        source /usr/share/doc/fzf/examples/key-bindings.bash
-    true
+    eval "$(fzf --bash)"
 fi

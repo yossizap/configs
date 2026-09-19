@@ -59,13 +59,22 @@ function! configs_project#apply() abort
     let [l:profile, l:root] = s:profile(expand('%:p'))
     let b:configs_project_profile = l:profile
     let b:configs_project_root = l:root
-    let b:configs_completion_enabled = get(get(l:profile, 'completion', {}), 'enabled', v:false)
+    let b:configs_completion_enabled = index(['json', 'jsonc'], &filetype) >= 0
+                \ ? v:true
+                \ : get(get(l:profile, 'completion', {}), 'enabled', v:false)
+
+    if index(['json', 'jsonc'], &filetype) >= 0
+        let b:ale_enabled = 0
+        setlocal omnifunc=lsp#complete
+    endif
 
     if empty(l:profile)
         return
     endif
 
-    let b:ale_enabled = get(l:profile, 'ale', v:true)
+    if index(['json', 'jsonc'], &filetype) < 0
+        let b:ale_enabled = get(l:profile, 'ale', v:true)
+    endif
     let b:ale_completion_enabled = 0
     if &filetype ==# 'python'
         let l:python = get(l:profile, 'python', {})
@@ -110,6 +119,13 @@ function! configs_project#zuban_root_uri() abort
     return empty(l:profile) ? '' : lsp#utils#path_to_uri(l:root)
 endfunction
 
+function! configs_project#json_root_uri() abort
+    let l:start = fnamemodify(expand('%:p'), ':h')
+    let l:git = finddir('.git', l:start . ';')
+    let l:root = empty(l:git) ? l:start : fnamemodify(l:git, ':h')
+    return lsp#utils#path_to_uri(l:root)
+endfunction
+
 function! configs_project#register_lsp() abort
     call lsp#register_server({
                 \ 'name': 'zuban',
@@ -117,12 +133,21 @@ function! configs_project#register_lsp() abort
                 \ 'root_uri': {server_info -> configs_project#zuban_root_uri()},
                 \ 'allowlist': ['python'],
                 \ })
+    if executable('vscode-json-language-server')
+        call lsp#register_server({
+                    \ 'name': 'vscode-json-language-server',
+                    \ 'cmd': {server_info -> ['vscode-json-language-server', '--stdio']},
+                    \ 'root_uri': {server_info -> configs_project#json_root_uri()},
+                    \ 'allowlist': ['json', 'jsonc'],
+                    \ })
+    endif
 endfunction
 
 function! configs_project#lsp_buffer() abort
-    if !empty(get(b:, 'configs_project_profile', {}))
-                \ && &filetype ==# 'python'
-                \ && get(b:, 'configs_completion_enabled', 0)
+    if index(['json', 'jsonc'], &filetype) >= 0
+                \ || (!empty(get(b:, 'configs_project_profile', {}))
+                \     && &filetype ==# 'python'
+                \     && get(b:, 'configs_completion_enabled', 0))
         setlocal omnifunc=lsp#complete
         nmap <buffer> K <plug>(lsp-hover)
         nmap <buffer> gd <plug>(lsp-definition)

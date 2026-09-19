@@ -1,0 +1,22 @@
+name: Installer
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu:
+    name: Ubuntu ${{ matrix.ubuntu }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: ["22.04", "24.04", "26.04"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run installer smoke test
+        run: tests/install-in-docker.sh "${{ matrix.ubuntu }}"

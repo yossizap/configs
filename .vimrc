@@ -615,6 +615,8 @@ endif
 let g:lsp_async_completion = 0
 let g:lsp_signature_help_enabled = 1
 let g:lsp_signature_help_delay = 150
+let g:lsp_diagnostics_enabled = 1
+let g:lsp_diagnostics_signs_enabled = 1
 let g:lsp_diagnostics_echo_cursor = 1
 let g:lsp_diagnostics_echo_delay = 200
 let g:lsp_diagnostics_float_cursor = 0
