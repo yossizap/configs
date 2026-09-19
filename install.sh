@@ -1176,4 +1176,9 @@ echo "Verifying installs..."
 vim --version | head -n 1
 tmux -V
 
+if [ -f "$REPO_DIR/user-install.sh" ]; then
+    echo "Running user-install.sh..."
+    bash "$REPO_DIR/user-install.sh"
+fi
+
 echo "Installation complete!"

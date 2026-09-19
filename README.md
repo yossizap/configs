@@ -23,7 +23,9 @@ The supported Ubuntu releases are the LTS versions under standard Canonical main
 
 Run `select-config` to select terminal fonts and zsh, Vim, or tmux themes. Use Left to go back, Right or Enter to select, and `p` to preview.
 
-Optional machine-specific settings can be added to `~/.zshrc.local` and `~/.vimrc.local`. They are loaded after the repository configuration and are not overwritten by the installer.
+Optional machine-specific settings can be added to `~/.vimrc.local`, `~/.tmux.conf.local`, and `~/.zshrc.local`. They load after the repository configuration and are not overwritten by the installer.
+
+The installer runs the repository's empty `user-install.sh` hook after the standard installation and verification steps. Add machine-specific installation commands there when maintaining a personal checkout.
 
 Nerd Font installation and terminal font configuration are optional prompts. For unattended runs, set `INSTALL_NERD_FONT=true` and/or `CONFIGURE_TERMINAL_FONT=true` explicitly; set either variable to `false` to skip it.
 

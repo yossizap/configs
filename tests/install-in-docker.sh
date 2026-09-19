@@ -23,6 +23,7 @@ docker run --rm \
         apt-get install -y --no-install-recommends ca-certificates rsync
         cp -a /source /tmp/configs
         cd /tmp/configs
+        printf "%s\n" "touch /tmp/user-install-ran" > user-install.sh
         env \
             VIM_FROM_SOURCE=false \
             TMUX_FROM_SOURCE=false \
@@ -36,6 +37,7 @@ docker run --rm \
             CONFIGURE_TERMINAL_FONT=false \
             CHANGE_DEFAULT_SHELL=false \
             ./install.sh
+        test -e /tmp/user-install-ran
         command -v vim
         command -v tmux
         command -v fzf
