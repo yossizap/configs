@@ -610,7 +610,7 @@ command! ClangTidyFix ALEFix clangtidy
 set completeopt=menuone,noselect
 if exists('+completepopup')
     set completeopt+=popup
-    set completepopup=align:item,width:70,height:15,border:single,borderhighlight:Comment,highlight:Normal,close:off,resize:off
+    set completepopup=align:item,width:70,height:15,highlight:Normal
 endif
 let g:lsp_async_completion = 0
 let g:lsp_signature_help_enabled = 1
