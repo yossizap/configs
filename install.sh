@@ -12,10 +12,10 @@ INSTALL_NVM="${INSTALL_NVM:-true}"
 CHANGE_DEFAULT_SHELL="${CHANGE_DEFAULT_SHELL:-true}"
 INSTALL_EXTRA_TOOLS="${INSTALL_EXTRA_TOOLS:-true}"
 INSTALL_COMPLETION_TOOLS="${INSTALL_COMPLETION_TOOLS:-true}"
-INSTALL_DOCKER="${INSTALL_DOCKER:-prompt}"
-INSTALL_CONDA="${INSTALL_CONDA:-prompt}"
+INSTALL_DOCKER="${INSTALL_DOCKER:-true}"
+INSTALL_CONDA="${INSTALL_CONDA:-true}"
 INSTALL_MAMBA="${INSTALL_MAMBA:-true}"
-INSTALL_NERD_FONT="${INSTALL_NERD_FONT:-prompt}"
+INSTALL_NERD_FONT="${INSTALL_NERD_FONT:-true}"
 NERD_FONT_REFRESH="${NERD_FONT_REFRESH:-false}"
 CONFIGURE_TERMINAL_FONT="${CONFIGURE_TERMINAL_FONT:-prompt}"
 OFFLINE_MODE="${OFFLINE_MODE:-false}"
@@ -30,7 +30,6 @@ NERD_FONT_SIZE="${NERD_FONT_SIZE:-14}"
 SRC_ROOT="${SRC_ROOT:-$REPO_DIR/sources}"
 VIM_SRC_DIR="${VIM_SRC_DIR:-$SRC_ROOT/vim}"
 TMUX_SRC_DIR="${TMUX_SRC_DIR:-$SRC_ROOT/tmux}"
-NERD_FONT_SRC_DIR="${NERD_FONT_SRC_DIR:-$SRC_ROOT/nerd-fonts}"
 VIM_PLUG_SRC_DIR="${VIM_PLUG_SRC_DIR:-$SRC_ROOT/vim-plug}"
 NVM_SRC_DIR="${NVM_SRC_DIR:-$SRC_ROOT/nvm}"
 CONDA_ZSH_COMPLETION_SRC_DIR="${CONDA_ZSH_COMPLETION_SRC_DIR:-$SRC_ROOT/conda-zsh-completion}"
@@ -438,24 +437,139 @@ install_fzf() {
 }
 
 install_nvm() {
+    local node_bin
+
     echo "Installing nvm $NVM_REF..."
     clone_or_update https://github.com/nvm-sh/nvm.git "$NVM_SRC_DIR" "$NVM_REF"
     mkdir -p "$NVM_DIR"
     rsync -ah --exclude .git "$NVM_SRC_DIR/" "$NVM_DIR/"
 
     export NVM_DIR
-    # shellcheck source=/dev/null
-    . "$NVM_DIR/nvm.sh"
-    if [ "$OFFLINE_MODE" = true ]; then
-        if ! nvm version default >/dev/null 2>&1; then
-            echo "Offline nvm installation requires a default Node version in $NVM_DIR." >&2
-            exit 1
+    node_bin="$(
+        set -eo pipefail
+        set +u
+        # shellcheck source=/dev/null
+        . "$NVM_DIR/nvm.sh" --no-use
+        if [ "$OFFLINE_MODE" = true ]; then
+            if ! nvm version default >/dev/null 2>&1; then
+                echo "Offline nvm installation requires a default Node version in $NVM_DIR." >&2
+                exit 1
+            fi
+        else
+            node_dist_dir="$REPO_DIR/source/node-dist"
+            if [ ! -f "$node_dist_dir/index.tab" ]; then
+                node_dist_dir="$SRC_ROOT/node-dist"
+            fi
+            if [ -f "$node_dist_dir/index.tab" ]; then
+                node_dist_port_file="$(mktemp)"
+                python3 -u - "$node_dist_dir" > "$node_dist_port_file" <<'PY' &
+import http.server
+import sys
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=sys.argv[1], **kwargs)
+
+    def log_message(self, *args):
+        pass
+
+with http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+    print(server.server_port, flush=True)
+    server.serve_forever()
+PY
+                node_dist_pid=$!
+                trap 'kill "$node_dist_pid" 2>/dev/null || true; wait "$node_dist_pid" 2>/dev/null || true; rm -f "$node_dist_port_file"' EXIT
+                for ((attempt = 0; attempt < 50; attempt++)); do
+                    if read -r node_dist_port < "$node_dist_port_file"; then
+                        break
+                    fi
+                    kill -0 "$node_dist_pid" 2>/dev/null || exit 1
+                    sleep 0.1
+                done
+                [ -n "${node_dist_port:-}" ] || { echo "Node distribution server did not start." >&2; exit 1; }
+                export NVM_NODEJS_ORG_MIRROR="http://127.0.0.1:$node_dist_port"
+            fi
+            nvm install --lts >&2
+            nvm alias default 'lts/*' >&2
         fi
-    else
-        nvm install --lts
-        nvm alias default 'lts/*'
+        nvm use --silent default >&2
+        printf '%s\n' "${NVM_BIN:?nvm did not select a Node binary}"
+    )"
+    export PATH="$node_bin:$PATH"
+    hash -r
+}
+
+configure_shell_startup() {
+    local profile
+    mkdir -p "$HOME/.config/configs"
+    # Persist custom NVM_DIR values for future sessions, with shell-safe quoting.
+    printf 'export NVM_DIR=%q\n' "$NVM_DIR" > "$HOME/.config/configs/nvm-env.sh"
+
+    # Bash reads only the first existing login profile, not necessarily .profile.
+    profile="$HOME/.profile"
+    if [ -f "$HOME/.bash_profile" ]; then
+        profile="$HOME/.bash_profile"
+    elif [ -f "$HOME/.bash_login" ]; then
+        profile="$HOME/.bash_login"
     fi
-    nvm use --silent default
+    if ! grep -q '^# >>> configs bash login >>>$' "$profile" 2>/dev/null; then
+        cat >> "$profile" <<'EOF'
+
+# >>> configs bash login >>>
+if [ -n "${BASH_VERSION:-}" ]; then
+    case $- in
+        *i*) [ ! -r "$HOME/.bashrc" ] || . "$HOME/.bashrc" ;;
+    esac
+fi
+# <<< configs bash login <<<
+EOF
+    fi
+}
+
+configured_login_shell() {
+    getent passwd "$INSTALL_USER" | cut -d: -f7
+}
+
+ensure_default_zsh() {
+    local zsh_bin login_shell
+    zsh_bin="$(command -v zsh)" || {
+        echo "zsh is required as the default login shell, but is not installed." >&2
+        return 1
+    }
+    login_shell="$(configured_login_shell)"
+    if [ "${login_shell##*/}" != zsh ]; then
+        if ! should_run "$CHANGE_DEFAULT_SHELL" "Make zsh the default login shell?" yes; then
+            echo "Default login shell must be zsh; CHANGE_DEFAULT_SHELL prevented changing it." >&2
+            return 1
+        fi
+        $SUDO chsh -s "$zsh_bin" "$INSTALL_USER" || {
+            echo "Failed to set zsh as the default login shell for $INSTALL_USER." >&2
+            return 1
+        }
+    fi
+    login_shell="$(configured_login_shell)"
+    if [ "${login_shell##*/}" != zsh ] || [ ! -x "$login_shell" ]; then
+        echo "Default login shell for $INSTALL_USER is not an executable zsh: $login_shell" >&2
+        return 1
+    fi
+    export SHELL="$login_shell"
+}
+
+refresh_default_shell() {
+    local login_shell
+    login_shell="$(configured_login_shell)"
+    if [ "${login_shell##*/}" != zsh ] || [ ! -x "$login_shell" ]; then
+        echo "Cannot refresh shell: default login shell must be an executable zsh." >&2
+        return 1
+    fi
+    export SHELL="$login_shell"
+    echo "Installation complete!"
+    if [ -t 0 ] && [ -t 1 ]; then
+        echo "Starting a fresh zsh login session..."
+        exec "$login_shell" -il
+    fi
+    # Batch installs cannot replace their parent shell or open an interactive TTY.
+    echo "Default shell verified as zsh; new terminal sessions will load the updated configuration."
 }
 
 install_zsh_plugins() {
@@ -601,8 +715,9 @@ install_tmux_theme_plugins() {
     done < <("$REPO_DIR/bin/select-tmux-theme" --repos)
 }
 
-install_nerd_font() {
-    local font_source
+install_nerd_font() (
+    local archive
+    local tmp_dir
 
     if [ "$NERD_FONT_REFRESH" != true ] &&
         command -v fc-match >/dev/null 2>&1 &&
@@ -612,44 +727,47 @@ install_nerd_font() {
     fi
 
     echo "Installing $NERD_FONT_FAMILY..."
-    if [ -d "$NERD_FONT_SRC_DIR/.git" ]; then
-        if [ "$OFFLINE_MODE" = true ]; then
-            echo "Using offline checkout: $NERD_FONT_SRC_DIR"
-        elif [ -z "$(git -C "$NERD_FONT_SRC_DIR" status --porcelain)" ]; then
-            git -C "$NERD_FONT_SRC_DIR" fetch --depth 1 origin master
-            git -C "$NERD_FONT_SRC_DIR" checkout --detach FETCH_HEAD
-        else
-            echo "Preserving modified checkout: $NERD_FONT_SRC_DIR"
+    tmp_dir="$(mktemp -d)"
+    trap 'rm -rf "$tmp_dir"' EXIT
+    if [ "$OFFLINE_MODE" = true ]; then
+        archive="$(find_source_file "$NERD_FONT_NAME.tar.xz" || true)"
+        if [ -z "$archive" ]; then
+            archive="$(find_source_file "$NERD_FONT_NAME.zip" || true)"
         fi
-    elif [ -e "$NERD_FONT_SRC_DIR" ]; then
-        echo "Source path exists and is not a git checkout: $NERD_FONT_SRC_DIR" >&2
-        exit 1
-    elif [ "$OFFLINE_MODE" = true ]; then
-        echo "Missing offline Git checkout: $NERD_FONT_SRC_DIR" >&2
-        exit 1
+        if [ -z "$archive" ]; then
+            echo "Offline Nerd Font installation requires $NERD_FONT_NAME.tar.xz or $NERD_FONT_NAME.zip in sources/" >&2
+            exit 1
+        fi
     else
-        git clone --depth 1 --filter=blob:none --no-checkout \
-            https://github.com/ryanoasis/nerd-fonts.git "$NERD_FONT_SRC_DIR"
+        archive="$tmp_dir/$NERD_FONT_NAME.tar.xz"
+        curl -fL --retry 3 \
+            "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/$NERD_FONT_NAME.tar.xz" \
+            -o "$archive"
     fi
 
-    git -C "$NERD_FONT_SRC_DIR" sparse-checkout init --cone
-    git -C "$NERD_FONT_SRC_DIR" sparse-checkout set "patched-fonts/$NERD_FONT_NAME"
-    git -C "$NERD_FONT_SRC_DIR" checkout
-    font_source="$NERD_FONT_SRC_DIR/patched-fonts/$NERD_FONT_NAME"
-    if ! find "$font_source" -type f -iname '*NerdFontMono*.ttf' -print -quit |
+    mkdir -p "$tmp_dir/extracted"
+    case "$archive" in
+        *.tar.xz)
+            tar -xJf "$archive" -C "$tmp_dir/extracted" --wildcards '*NerdFontMono*.ttf'
+            ;;
+        *.zip)
+            unzip -q "$archive" '*NerdFontMono*.ttf' -d "$tmp_dir/extracted"
+            ;;
+    esac
+    if ! find "$tmp_dir/extracted" -type f -iname '*NerdFontMono*.ttf' -print -quit |
         grep -q .; then
-        echo "No $NERD_FONT_FAMILY files found in $font_source" >&2
+        echo "No $NERD_FONT_FAMILY files found in $archive" >&2
         exit 1
     fi
 
     mkdir -p "$USER_FONT_DIR"
-    find "$font_source" -type f -iname '*NerdFontMono*.ttf' \
+    find "$tmp_dir/extracted" -type f -iname '*NerdFontMono*.ttf' \
         -exec cp -f -t "$USER_FONT_DIR" {} +
 
     if command -v fc-cache >/dev/null 2>&1; then
         fc-cache -f "$USER_FONT_DIR"
     fi
-}
+)
 
 configure_terminal_font() {
     local font_spec="$NERD_FONT_FAMILY $NERD_FONT_SIZE"
@@ -722,6 +840,8 @@ install_conda() {
 
     if [ -x "$CONDA_DIR/bin/conda" ]; then
         echo "Conda already installed at $CONDA_DIR"
+        install_conda_shortcuts
+        return
     else
         case "$(uname -m)" in
             x86_64) subdir=linux-64 ;;
@@ -811,24 +931,9 @@ maybe_install_conda() {
         false)
             echo "Skipping conda install"
             ;;
-        prompt)
-            if [ ! -t 0 ]; then
-                echo "Skipping conda prompt in non-interactive shell"
-                return
-            fi
-            if [ -x "$CONDA_DIR/bin/conda" ]; then
-                if ask_yes_no "Conda already exists at $CONDA_DIR. Update mamba and shell shortcuts?" yes; then
-                    install_conda
-                fi
-            elif ask_yes_no "Install Conda, mamba, and shell shortcuts at $CONDA_DIR?" no; then
-                install_conda
-            else
-                echo "Skipping conda install"
-            fi
-            ;;
         *)
             echo "Unsupported INSTALL_CONDA value: $INSTALL_CONDA" >&2
-            echo "Use true, false, or prompt." >&2
+            echo "Use true or false." >&2
             exit 1
             ;;
     esac
@@ -913,17 +1018,17 @@ if should_run "$INSTALL_EXTRA_TOOLS" "Install extra command-line tools?" yes; th
 fi
 
 if should_run "$INSTALL_DOCKER" "Install Docker and add $INSTALL_USER to the docker group?" yes; then
-    if is_wsl; then
-        echo "WSL detected: Docker Desktop integration is usually preferable to installing docker.io inside WSL."
-        echo "Continuing because INSTALL_DOCKER is enabled."
-    fi
-    echo "Installing Docker..."
-    apt_install_available docker.io docker-compose-v2
-    add_user_to_group "$INSTALL_USER" docker
-    if command -v systemctl >/dev/null 2>&1; then
-        $SUDO systemctl enable --now docker >/dev/null 2>&1 || true
+    if command -v docker >/dev/null 2>&1; then
+        echo "Docker already installed"
     else
-        $SUDO service docker start >/dev/null 2>&1 || true
+        echo "Installing Docker..."
+        apt_install_available docker.io docker-compose-v2
+        add_user_to_group "$INSTALL_USER" docker
+        if command -v systemctl >/dev/null 2>&1; then
+            $SUDO systemctl enable --now docker >/dev/null 2>&1 || true
+        else
+            $SUDO service docker start >/dev/null 2>&1 || true
+        fi
     fi
 fi
 
@@ -937,7 +1042,7 @@ if should_run "$INSTALL_NERD_FONT" "Install the configured Nerd Font?" yes; then
     install_nerd_font
 fi
 
-if should_run "$CONFIGURE_TERMINAL_FONT" "Set GNOME Terminal to $NERD_FONT_FAMILY $NERD_FONT_SIZE?" yes; then
+if should_run "$CONFIGURE_TERMINAL_FONT" "Set GNOME Terminal to $NERD_FONT_FAMILY $NERD_FONT_SIZE?" no; then
     if is_wsl; then
         echo "WSL detected; skipping GNOME Terminal font configuration. Set the font in Windows Terminal instead."
     else
@@ -1160,11 +1265,8 @@ if should_run "$INSTALL_COMPLETION_TOOLS" "Install completion and language-serve
     install_json_language_server
 fi
 
-if command -v zsh >/dev/null 2>&1 && should_run "$CHANGE_DEFAULT_SHELL" "Make zsh the default login shell?" yes; then
-    if [ "$(basename "${SHELL:-}")" != zsh ]; then
-        chsh -s "$(command -v zsh)" || true
-    fi
-fi
+configure_shell_startup
+ensure_default_zsh
 
 echo "Configuring Git..."
 git config --global diff.tool vimdiff
@@ -1181,4 +1283,4 @@ if [ -f "$REPO_DIR/user-install.sh" ]; then
     bash "$REPO_DIR/user-install.sh"
 fi
 
-echo "Installation complete!"
+refresh_default_shell

@@ -134,3 +134,18 @@ fi
 if command -v fzf >/dev/null 2>&1; then
     eval "$(fzf --bash)"
 fi
+
+# NVM is a shell function; load it in every new interactive shell.
+if [ -r "$HOME/.config/configs/nvm-env.sh" ]; then
+    . "$HOME/.config/configs/nvm-env.sh"
+fi
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+    . "$NVM_DIR/nvm.sh" --no-use
+    nvm use --silent default >/dev/null || {
+        printf '%s\n' 'NVM: default Node version is missing; run nvm install and nvm alias default VERSION.' >&2
+    }
+fi
+if [ -s "$NVM_DIR/bash_completion" ]; then
+    . "$NVM_DIR/bash_completion"
+fi

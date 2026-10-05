@@ -35,9 +35,11 @@ docker run --rm \
             INSTALL_CONDA=false \
             INSTALL_NERD_FONT=false \
             CONFIGURE_TERMINAL_FONT=false \
-            CHANGE_DEFAULT_SHELL=false \
+            CHANGE_DEFAULT_SHELL=true \
             ./install.sh
         test -e /tmp/user-install-ran
+        test "$(getent passwd root | cut -d: -f7)" = "$(command -v zsh)"
+        test -r /root/.config/configs/nvm-env.sh
         command -v vim
         command -v tmux
         command -v fzf

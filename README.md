@@ -27,11 +27,14 @@ Optional machine-specific settings can be added to `~/.vimrc.local`, `~/.tmux.co
 
 The installer runs the repository's empty `user-install.sh` hook after the standard installation and verification steps. Add machine-specific installation commands there when maintaining a personal checkout.
 
-Nerd Font installation and terminal font configuration are optional prompts. For unattended runs, set `INSTALL_NERD_FONT=true` and/or `CONFIGURE_TERMINAL_FONT=true` explicitly; set either variable to `false` to skip it.
+Docker, Conda, and Nerd Font installation run by default and skip software that is already installed. Set `INSTALL_DOCKER=false`, `INSTALL_CONDA=false`, or `INSTALL_NERD_FONT=false` to skip an installation. Terminal font configuration is the only default prompt; it defaults to no and can be set explicitly with `CONFIGURE_TERMINAL_FONT=true` or `false`.
+When enabled, Nerd Font installation downloads the configured font archive from the latest [Nerd Fonts GitHub release](https://github.com/ryanoasis/nerd-fonts/releases/latest). Set `NERD_FONT_REFRESH=true` to replace an already installed font. Offline installs use a matching `.tar.xz` or `.zip` archive in `sources/`.
 
 The installer uses the pinned fzf 0.74.1 GitHub release artifact rather than the older Ubuntu package. Override it with `FZF_VERSION`. It installs the binary under `~/.local/bin` and enables the native `fzf --zsh` and `fzf --bash` integrations. In zsh, `Ctrl+t` uses fzf to insert a directory.
 
-The installer tracks nvm's `master` branch in `sources/nvm`, installs the latest Node LTS, and makes it the default in new zsh sessions. Set `NVM_NODEJS_ORG_MIRROR` when Node releases must come from an internal mirror.
+The installer tracks nvm's `master` branch in `sources/nvm`, installs the latest Node LTS release, and makes it the default in new interactive Bash and Zsh sessions, including Bash login sessions. Custom `NVM_DIR` values are saved for future sessions. If `source/node-dist/index.tab` exists (or `sources/node-dist/index.tab` under the configured `SRC_ROOT`), the installer serves that distribution cache over loopback HTTP for nvm; otherwise nvm uses its usual mirror. Set `NVM_NODEJS_ORG_MIRROR` when Node releases must come from an internal mirror.
+
+The installer verifies the account’s configured login shell using `getent`, changes it to Zsh when allowed, and fails if that change fails or the default is still not Zsh. `CHANGE_DEFAULT_SHELL=false` is valid only when Zsh is already the default. After successful installation in a terminal, it starts a fresh interactive Zsh login session. Batch runs verify the default and exit without opening an interactive shell; an installer subprocess cannot replace its parent shell.
 
 # Vim Configuration
 
@@ -184,7 +187,7 @@ The optional command-line tools include `bat`, a syntax-highlighting `cat` alter
 - Powerline and upstream icon widgets require the terminal emulator profile to use a Nerd Font, such as `JetBrainsMono Nerd Font Mono`.
 - Truecolor is enabled for new tmux clients. Open a new terminal tab/window or detach and reattach tmux after changing terminal/font settings.
 - Tmux themes only control tmux UI colors. The main terminal pane background still comes from the terminal emulator profile unless the theme uses transparent/default backgrounds.
-- `install.sh` installs `JetBrainsMono Nerd Font Mono` by default and configures GNOME Terminal when `gsettings` is available. Set `INSTALL_NERD_FONT=false` or `CONFIGURE_TERMINAL_FONT=false` to skip those steps.
+- `install.sh` installs `JetBrainsMono Nerd Font Mono` by default and can configure GNOME Terminal when `gsettings` is available. Set `INSTALL_NERD_FONT=false` to skip the font, or `CONFIGURE_TERMINAL_FONT=true` to configure the terminal without a prompt.
 
 ## Tmux Shortcuts and Plugin Usage
 
