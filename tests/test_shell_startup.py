@@ -87,8 +87,12 @@ class ShellStartupTests(unittest.TestCase):
         self.assertIn('not an executable zsh', p.stderr)
 
     def test_terminal_refresh_executes_interactive_login_zsh(self):
-        (self.home / '.zshrc').write_text('[[ -o interactive && -o login ]] || exit 9\nprint CONFIGS_REFRESHED\nexit 0\n')
-        body = 'configured_login_shell() { echo "' + shutil.which('zsh') + '"; }\n' + function('refresh_default_shell') + '\nrefresh_default_shell\nexit 19'
+        shell_dir = self.home / 'shell'
+        shell_dir.mkdir()
+        fake_zsh = shell_dir / 'zsh'
+        fake_zsh.write_text('#!/bin/sh\n[ "$1" = -il ] && [ "$SHELL" = "$0" ] || exit 9\nprintf "CONFIGS_REFRESHED\\n"\n')
+        fake_zsh.chmod(0o755)
+        body = 'configured_login_shell() { echo "' + str(fake_zsh) + '"; }\n' + function('refresh_default_shell') + '\nrefresh_default_shell\nexit 19'
         master, slave = pty.openpty()
         try:
             proc = subprocess.Popen(['bash', '-c', body], stdin=slave, stdout=slave,

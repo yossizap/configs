@@ -7,6 +7,7 @@ cd "$repo_dir"
 bash -n .bashrc install.sh tests/install-in-docker.sh tests/lint.sh user-install.sh
 zsh -n .zshrc
 python3 tests/test_shell_startup.py
+python3 tests/test_installer_helpers.py
 shellcheck install.sh tests/install-in-docker.sh tests/lint.sh
 
 socket="lint-$$"

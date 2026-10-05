@@ -46,6 +46,7 @@ docker run --rm \
         command -v batcat
         bash -n .bashrc install.sh
         zsh -n .zshrc
+        python3 tests/test_installer_helpers.py
         tmux -f .tmux.conf start-server
         vim -Nu .vimrc -n -es +qa
     '

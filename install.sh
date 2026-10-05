@@ -43,8 +43,10 @@ USER_FONT_DIR="${USER_FONT_DIR:-$HOME/.local/share/fonts/$NERD_FONT_NAME}"
 INSTALL_USER="${INSTALL_USER:-${SUDO_USER:-$(id -un)}}"
 CONDA_DIR="${CONDA_DIR:-$HOME/miniconda3}"
 CONDA_CHANNEL="${CONDA_CHANNEL:-https://repo.anaconda.com/pkgs/main}"
+CONDA_CHANNEL="${CONDA_CHANNEL%/}"
 MAMBA_CHANNEL="${MAMBA_CHANNEL:-conda-forge}"
 NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+export REQUESTS_CA_BUNDLE="${REQUESTS_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}"
 
 if command -v sudo >/dev/null 2>&1 && [ "$(id -u)" -ne 0 ]; then
     SUDO=sudo
@@ -445,14 +447,14 @@ install_nvm() {
     rsync -ah --exclude .git "$NVM_SRC_DIR/" "$NVM_DIR/"
 
     export NVM_DIR
-    node_bin="$(
+    (
         set -eo pipefail
         set +u
         # shellcheck source=/dev/null
         . "$NVM_DIR/nvm.sh" --no-use
         if [ "$OFFLINE_MODE" = true ]; then
-            if ! nvm version default >/dev/null 2>&1; then
-                echo "Offline nvm installation requires a default Node version in $NVM_DIR." >&2
+            if [ "$(nvm version 22)" = N/A ]; then
+                echo "Offline nvm installation requires Node 22 in $NVM_DIR." >&2
                 exit 1
             fi
         else
@@ -489,10 +491,17 @@ PY
                 [ -n "${node_dist_port:-}" ] || { echo "Node distribution server did not start." >&2; exit 1; }
                 export NVM_NODEJS_ORG_MIRROR="http://127.0.0.1:$node_dist_port"
             fi
-            nvm install --lts >&2
-            nvm alias default 'lts/*' >&2
+            nvm install 22
         fi
-        nvm use --silent default >&2
+        nvm alias default 22
+        nvm use --silent default
+    )
+    node_bin="$(
+        set -eo pipefail
+        set +u
+        # shellcheck source=/dev/null
+        . "$NVM_DIR/nvm.sh" --no-use
+        nvm use --silent default >/dev/null
         printf '%s\n' "${NVM_BIN:?nvm did not select a Node binary}"
     )"
     export PATH="$node_bin:$PATH"
@@ -730,18 +739,18 @@ install_nerd_font() (
     tmp_dir="$(mktemp -d)"
     trap 'rm -rf "$tmp_dir"' EXIT
     if [ "$OFFLINE_MODE" = true ]; then
-        archive="$(find_source_file "$NERD_FONT_NAME.tar.xz" || true)"
+        archive="$(find_source_file "$NERD_FONT_NAME.zip" || true)"
         if [ -z "$archive" ]; then
-            archive="$(find_source_file "$NERD_FONT_NAME.zip" || true)"
+            archive="$(find_source_file "$NERD_FONT_NAME.tar.xz" || true)"
         fi
         if [ -z "$archive" ]; then
             echo "Offline Nerd Font installation requires $NERD_FONT_NAME.tar.xz or $NERD_FONT_NAME.zip in sources/" >&2
             exit 1
         fi
     else
-        archive="$tmp_dir/$NERD_FONT_NAME.tar.xz"
+        archive="$tmp_dir/$NERD_FONT_NAME.zip"
         curl -fL --retry 3 \
-            "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/$NERD_FONT_NAME.tar.xz" \
+            "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/$NERD_FONT_NAME.zip" \
             -o "$archive"
     fi
 
@@ -831,10 +840,54 @@ EOF
     done
 }
 
+seed_conda_standalone() {
+    local subdir="$1"
+    local tmp_dir="$2"
+    local repodata
+    local filename
+    local index_name
+
+    for index_name in current_repodata.json repodata.json; do
+        repodata="$tmp_dir/$index_name"
+        if ! curl -fL --retry 3 --retry-all-errors \
+            "$CONDA_CHANNEL/$subdir/$index_name" -o "$repodata"; then
+            continue
+        fi
+        if ! filename="$(python3 - "$repodata" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as source:
+        repodata = json.load(source)
+except (OSError, ValueError):
+    raise SystemExit(1)
+
+candidates = [
+    (metadata.get("timestamp", 0), filename)
+    for packages in (repodata.get("packages", {}), repodata.get("packages.conda", {}))
+    for filename, metadata in packages.items()
+    if metadata.get("name") == "conda-standalone"
+    and "_single_" in metadata.get("build", "")
+]
+if candidates:
+    print(max(candidates)[1])
+PY
+)"; then
+            continue
+        fi
+        if [ -n "$filename" ] && curl -fL --retry 3 --retry-all-errors \
+            "$CONDA_CHANNEL/$subdir/$filename" -o "$tmp_dir/$filename"; then
+            printf '%s\n' "$tmp_dir/$filename"
+            return
+        fi
+    done
+    echo "Unable to seed conda-standalone from $CONDA_CHANNEL/$subdir; check CONDA_CHANNEL and its repodata." >&2
+    return 1
+}
+
 install_conda() {
     local archive
-    local filename
-    local repodata
     local subdir
     local tmp_dir
 
@@ -863,29 +916,7 @@ install_conda() {
                 exit 1
             fi
 
-            repodata="$tmp_dir/current_repodata.json"
-            curl -fL "$CONDA_CHANNEL/$subdir/current_repodata.json" -o "$repodata"
-            filename="$(python3 - "$repodata" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1], encoding="utf-8") as source:
-    repodata = json.load(source)
-
-candidates = [
-    (metadata.get("timestamp", 0), filename)
-    for packages in (repodata.get("packages", {}), repodata.get("packages.conda", {}))
-    for filename, metadata in packages.items()
-    if metadata.get("name") == "conda-standalone"
-    and "_single_" in metadata.get("build", "")
-]
-if not candidates:
-    raise SystemExit("conda-standalone was not found in current_repodata.json")
-print(max(candidates)[1])
-PY
-)"
-            archive="$tmp_dir/$filename"
-            curl -fL "$CONDA_CHANNEL/$subdir/$filename" -o "$archive"
+            archive="$(seed_conda_standalone "$subdir" "$tmp_dir")"
         fi
 
         echo "Creating Conda environment at $CONDA_DIR..."
@@ -902,6 +933,7 @@ PY
             --prefix "$CONDA_DIR" \
             --override-channels \
             --channel "$CONDA_CHANNEL" \
+            --repodata-fn repodata.json \
             conda python pip
         rm -rf "$tmp_dir"
     fi
@@ -1257,7 +1289,7 @@ if command -v zsh >/dev/null 2>&1 && should_run "$INSTALL_OH_MY_ZSH" "Install or
     install_zsh_plugins
 fi
 
-if should_run "$INSTALL_NVM" "Install nvm and the latest Node LTS?" yes; then
+if should_run "$INSTALL_NVM" "Install nvm and Node 22?" yes; then
     install_nvm
 fi
 
